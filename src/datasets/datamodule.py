@@ -1,5 +1,6 @@
 import logging
 import os
+import sys
 from typing import Optional
 import random
 
@@ -96,6 +97,9 @@ class PANORAMIADataModule:
 
         # Instantiating a tokenizer
         self.tokenizer = AutoTokenizer.from_pretrained(self.pretrained_model_name_or_path, use_fast=True)
+
+        # increasing the model max length. We would later break the dataset into chunks that are smaller than Model length
+        self.tokenizer.model_max_length = sys.maxsize 
 
         # Lambda function for tokenizing the datasets
         
@@ -246,6 +250,10 @@ class PANORAMIADataModule:
         train_dataset = self.shuffled_chunked_datasets_dict['train'].select(range(train_offset))
         val_dataset = self.shuffled_chunked_datasets_dict['validation'].select(range(val_offset))
         test_dataset = None
+
+        # set the labels to input_ids (the task is language modeling)
+        train_dataset = train_dataset.add_column('labels', train_dataset['input_ids'].copy())
+        val_dataset = val_dataset.add_column('labels', val_dataset['input_ids'].copy())
 
         logging.info(f"Generator train dataset:\n{train_dataset}")
         logging.info(f"Generator validation dataset:\n{val_dataset}")

@@ -1,0 +1,37 @@
+base:
+  log_dir: /home/aaa208/scratch/PANORAMIA/experiments/WikiText-103/RMFN/multi-gpu/
+  project_name: PANORAMIA-RM-FN
+dataset:
+  path: wikitext
+  name: wikitext-103-raw-v1
+  path_to_synthetic_data_dir: ~
+  name_synthetic_data: ~
+  synthetic_text_column_name: text
+  seed: 42
+  do_shuffle: True
+  pretrained_model_name_or_path: gpt2
+  block_size: 128
+  generator_train_percent: 22
+  prompt_sampling_percent: 12
+  target_model_percent: 45
+  helper_model_percent: 45
+  mia_real_num_train : 500
+  mia_real_num_val : 500
+  mia_real_num_test : 1000
+  include_synthetic: False
+  audit_mode:  ~
+  num_syn_canary: 2000
+generator:
+  train:
+    pretrained_model_name_or_path: gpt2
+    saving_dir: /home/aaa208/scratch/PANORAMIA/outputs/WikiText-103/generator/saved_model/multi-gpu/
+    run_name: generator-fine-tune
+    optimization:
+      per_device_batch_size: 64
+      epoch: 1
+      learning_rate: 0.00002
+      weight_decay: 0.01
+      warmup_steps: 100
+
+  generation:
+    ...:

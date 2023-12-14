@@ -10,13 +10,13 @@ def add_base_args(parser):
     return parser
 
 def add_dataset_args(parser):
+    #parser.add_argument("", type)
     return parser
 
 def add_generator_args(parser):
-    
     return parser
 
-def init_args(parser):
+def init_args():
     parser = argparse.ArgumentParser()
     parser = add_load_args(parser)
     parser = add_base_args(parser)

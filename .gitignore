@@ -1,2 +1,23 @@
 # Python virtual environment
 panoramia_venv
+
+# wandb local directory
+wandb
+
+# random generated files
+__pycache__
+.vscode
+.ipynb_checkpoints
+
+# temporary dir
+tmp_utils
+
+# slurm output files
+slurm*
+
+*.pth
+*.ipynb
+*.xml
+*.iml
+*.bin
+*.pyc
