@@ -1,15 +1,15 @@
 base:
-  log_dir: /home/aaa208/scratch/PANORAMIA/experiments/WikiText-103/RMFN/generation/
-  project_name: PANORAMIA-RM-FN
+  log_dir: /home/aaa208/scratch/PANORAMIA/experiments/WikiText-2/RMFN/
+  project_name: PANORAMIA-Wiki-Text-2-RMFN
 dataset:
   path: wikitext
-  name: wikitext-103-raw-v1
-  path_to_synthetic_data: /home/aaa208/scratch/PANORAMIA/outputs/WikiText-103/generator/saved_synthetic_data/syn_data.csv
+  name: wikitext-2-raw-v1
+  path_to_synthetic_data: /home/aaa208/scratch/PANORAMIA/outputs/WikiText-2/generator/saved_synthetic_data/syn_data.csv
   synthetic_text_column_name: text
   seed: 42
   do_shuffle: True
   pretrained_model_name_or_path: gpt2
-  block_size: 128
+  block_size: 64
   generator_train_percent: 22
   prompt_sampling_percent: 12
   target_model_percent: 45
@@ -23,7 +23,7 @@ dataset:
 generator:
   train:
     pretrained_model_name_or_path: gpt2
-    saving_dir: /home/aaa208/scratch/PANORAMIA/outputs/WikiText-103/generator/saved_model/
+    saving_dir: /home/aaa208/scratch/PANORAMIA/outputs/WikiText-2/generator/saved_model/checkpoint-330
     run_name: generator-fine-tune
     seed: 42
     optimization:
@@ -34,12 +34,13 @@ generator:
       warmup_steps: 100
 
   generation:
-    saving_file: /home/aaa208/scratch/PANORAMIA/outputs/WikiText-103/generator/saved_synthetic_data/syn_data.csv
+    saving_dir: /home/aaa208/scratch/PANORAMIA/outputs/WikiText-2/generator/saved_synthetic_data
+    syn_file_name: syn_data.csv
     save_loss_on_target: False
     parameters:
       batch_size: 128
-      prompt_sequence_length: 128
-      max_length: 256
+      prompt_sequence_length: 64
+      max_length: 128
       top_k: 200
       top_p: 1
       temperature: 1
@@ -47,7 +48,7 @@ generator:
 audit:
   target:
     pretrained_model_name_or_path: gpt2
-    saving_dir: /home/aaa208/scratch/PANORAMIA/outputs/WikiText-103/audit_model/target/saved_model/
+    saving_dir: /home/aaa208/scratch/PANORAMIA/outputs/WikiText-2/audit_model/target/saved_model/
     seed: 42
     run_name: 
     optimization: 
@@ -61,7 +62,7 @@ audit:
       save_total_limit: ~
   helper:
     pretrained_model_name_or_path: gpt2
-    saving_dir: /home/aaa208/scratch/PANORAMIA/outputs/WikiText-103/audit_model/helper/saved_model/
+    saving_dir: /home/aaa208/scratch/PANORAMIA/outputs/WikiText-2/audit_model/helper/saved_model/
     seed: 42
     run_name: 
     optimization:

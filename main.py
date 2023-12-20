@@ -4,10 +4,13 @@ import sys
 
 import yaml
 from easydict import EasyDict
+from transformers import AutoModelForCausalLM
 
 from arguments import init_args
 from src.datasets.datamodule import PANORAMIADataModule
 from src.generator.train import fine_tune_generator
+from src.generator.generate import generate_synthetic_samples
+from src.audit_model.train import train_audit_model
 
 def main(config: EasyDict):
     """
@@ -18,20 +21,34 @@ def main(config: EasyDict):
         **config.dataset
     )
     
+    
+
     # --------------------
     # Part 1. Generative Model Training/Loading
     # --------------------
-    # Train if synthetic data doesn't already exist
-    if (config.dataset.path_to_synthetic_data_dir is None):
-        fine_tune_generator(config, dm)
 
+    # Train if the generative model is not provided
+    if os.path.exists(config.generator.train.saving_dir):
+        logging.info(f"Loading the generator model from {config.generator.train.saving_dir} ...")
+        generator_model = AutoModelForCausalLM.from_pretrained(config.generator.train.saving_dir)
+    else:
+        generator_model = fine_tune_generator(config, dm)
 
+    
     # --------------------
     # Part 2. Generate/Load Synthetic Samples
     # --------------------
 
-    # generate_synthetic()
+    if not os.path.exists(config.generator.generation.saving_dir):
+        generate_synthetic_samples(config, dm, generator_model)
 
+    
+    # Handling the synthetic dataset in data module
+    dm.setup_synthetic_dataset()
+
+
+    # del the generator model from memory
+    del generator_model
 
     # --------------------
     # Part 3. Train/Load Audit Model

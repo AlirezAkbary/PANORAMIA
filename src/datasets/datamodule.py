@@ -5,6 +5,7 @@ from typing import Optional
 import random
 
 import torch
+from torch.utils.data import DataLoader
 import pandas as pd
 import numpy as np
 from datasets import load_dataset, Dataset, concatenate_datasets
@@ -31,8 +32,7 @@ class PANORAMIADataModule:
     def __init__(self,
         path: str,
         name: Optional[str] = None,
-        path_to_synthetic_data_dir: str = None,
-        name_synthetic_data: str = None,
+        path_to_synthetic_data: str = None,
         synthetic_text_column_name: str = 'text',
         seed:  Optional[int] = None,
         do_shuffle: bool = False,
@@ -42,9 +42,9 @@ class PANORAMIADataModule:
         prompt_sampling_percent: int = 13,
         target_model_percent: int = 50,
         helper_model_percent: int = 50,
-        mia_real_num_train : int = 500,
-        mia_real_num_val : int = 500,
-        mia_real_num_test : int = 1000,
+        mia_num_train : int = 500,
+        mia_num_val : int = 500,
+        mia_num_test : int = 1000,
         include_synthetic: bool = False,
         audit_mode: str = '',
         num_syn_canary: int = 2000
@@ -54,12 +54,11 @@ class PANORAMIADataModule:
         Parameters
         ----------
         helper_model_percent: int
-            allocates the last (helper_model_percent)% of the original dataset for training of the helper model.
+            allocates the target_model_percent%:(target_model_percent+helper_model_percent)% of the original dataset for training of the helper model.
         """
         self.path = path
         self.name = name
-        self.path_to_synthetic_data_dir = path_to_synthetic_data_dir
-        self.name_synthetic_data = name_synthetic_data
+        self.path_to_synthetic_data = path_to_synthetic_data
         self.synthetic_text_column_name = synthetic_text_column_name
         self.seed = seed,
         self.do_shuffle = do_shuffle
@@ -69,9 +68,9 @@ class PANORAMIADataModule:
         self.prompt_sampling_percent = prompt_sampling_percent
         self.target_model_percent = target_model_percent
         self.helper_model_percent = helper_model_percent
-        self.mia_real_num_train = mia_real_num_train
-        self.mia_real_num_val = mia_real_num_val
-        self.mia_real_num_test = mia_real_num_test # m in theory
+        self.mia_num_train = mia_num_train
+        self.mia_num_val = mia_num_val
+        self.mia_num_test = mia_num_test # m in theory
         self.include_synthetic = include_synthetic
         self.audit_mode = audit_mode
         self.num_syn_canary = num_syn_canary
@@ -97,7 +96,7 @@ class PANORAMIADataModule:
 
         # Instantiating a tokenizer
         self.tokenizer = AutoTokenizer.from_pretrained(self.pretrained_model_name_or_path, use_fast=True)
-
+        
         # increasing the model max length. We would later break the dataset into chunks that are smaller than Model length
         self.tokenizer.model_max_length = sys.maxsize 
 
@@ -107,7 +106,7 @@ class PANORAMIADataModule:
         # datasets.DatasetDict has a map method applying a function to all the elements in the table
         # The transformation is applied to all the datasets of the dataset dictionary.
         self.tokenize_lambda_function = lambda examples: self._tokenize_function(examples, self.tokenizer)
-        tokenized_datasets_dict = datasets_dict.map(self.tokenize_lambda_function, batched=True, num_proc=4, remove_columns=["text"])
+        tokenized_datasets_dict = datasets_dict.map(self.tokenize_lambda_function, batched=True, batch_size=1000, num_proc=4, remove_columns=["text"])
 
         # Preprocessing the dataset. Breaking the dataset into equal chunks
         group_texts_lambda_function = lambda examples: self._group_texts(examples, self.block_size)
@@ -124,18 +123,15 @@ class PANORAMIADataModule:
             self.shuffled_chunked_datasets_dict = chunked_datasets_dict.shuffle(seed=self.seed)
         logging.info(f"First 5 examples in the shuffled original dataset:\n{self.tokenizer.batch_decode(self.shuffled_chunked_datasets_dict['train']['input_ids'][:5])}")
         
-        # Handling the synthetic dataset
-        self.setup_synthetic_dataset()
         
         
 
     def setup_synthetic_dataset(self):
         """
         """
-        if (self.path_to_synthetic_data_dir is not None) and (self.name_synthetic_data is not None):
+        if (self.path_to_synthetic_data is not None):
             # Loading synthetic dataset into a pandas dataframe
-            synthetic_data_path = os.path.join(self.path_to_synthetic_data_dir, self.name_synthetic_data)
-            synthetic_df = self._read_split(synthetic_data_path)
+            synthetic_df = self._read_split(self.path_to_synthetic_data)
 
             # renaming the name of columnn containing the generated texts to text
             synthetic_df.rename(columns={self.synthetic_text_column_name: 'text'}, inplace=True)
@@ -223,12 +219,11 @@ class PANORAMIADataModule:
         test_dataset = None
 
         
-        if include_synthetic:
-            pass
-        else:
-            pass
-
-        pass
+        if self.include_synthetic:
+            logging.info(f"including {self.num_syn_canary} synthetic samples into the target model...")
+            raise NotImplementedError
+        
+        return train_dataset, val_dataset, test_dataset
 
     def get_target_model_dataloaders(self):
         pass
@@ -273,11 +268,13 @@ class PANORAMIADataModule:
         prompt_dataset = self.shuffled_chunked_datasets_dict['train'].select(range(generator_training_offset, generator_prompting_offset))
 
         logging.info(f"Generation prompt dataset:\n{prompt_dataset}")
-        return prompt_dataset
+        return prompt_dataset.with_format("torch")
         
 
-    def get_generator_prompt_dataloaders(self):
-        raise NotImplementedError
+    def get_generator_prompt_dataloaders(self, batch_size):
+        torch_prompt_dataset = self.get_generator_prompt_datasets()
+        return DataLoader(torch_prompt_dataset, batch_size=batch_size, shuffle=True)
+        
 
     def get_mia_datasets(self):
         pass

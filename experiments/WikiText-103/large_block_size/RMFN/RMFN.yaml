@@ -1,6 +1,6 @@
 base:
-  log_dir: /home/aaa208/scratch/PANORAMIA/experiments/WikiText-103/RMFN/generation/
-  project_name: PANORAMIA-RM-FN
+  log_dir: /home/aaa208/scratch/PANORAMIA/experiments/WikiText-103/large_black_size/RMFN/
+  project_name: PANORAMIA-WikiText-103-Large-Block-Size-RM-FN
 dataset:
   path: wikitext
   name: wikitext-103-raw-v1
@@ -9,7 +9,7 @@ dataset:
   seed: 42
   do_shuffle: True
   pretrained_model_name_or_path: gpt2
-  block_size: 128
+  block_size: 512
   generator_train_percent: 22
   prompt_sampling_percent: 12
   target_model_percent: 45
@@ -23,18 +23,19 @@ dataset:
 generator:
   train:
     pretrained_model_name_or_path: gpt2
-    saving_dir: /home/aaa208/scratch/PANORAMIA/outputs/WikiText-103/generator/saved_model/
+    saving_dir: /home/aaa208/scratch/PANORAMIA/outputs/WikiText-103/generator/large_block_size_saved_model/
     run_name: generator-fine-tune
     seed: 42
     optimization:
-      per_device_batch_size: 64
+      per_device_batch_size: 16
       epoch: 60
       learning_rate: 0.00002
       weight_decay: 0.01
       warmup_steps: 100
 
   generation:
-    saving_file: /home/aaa208/scratch/PANORAMIA/outputs/WikiText-103/generator/saved_synthetic_data/syn_data.csv
+    saving_dir: /home/aaa208/scratch/PANORAMIA/outputs/WikiText-103/generator/saved_synthetic_data/
+    syn_file_name: syn_data.csv
     save_loss_on_target: False
     parameters:
       batch_size: 128
