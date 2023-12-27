@@ -54,11 +54,33 @@ def main(config: EasyDict):
     # Part 3. Train/Load Audit Model
     # --------------------
 
-    # train_audit_model()
+    # train the target model
+    if os.path.exists(config.audit.target.saving_dir):
+        target_model = AutoModelForCausalLM.from_pretrained(config.audit.target.saving_dir)
+    else:
+        target_model = train_audit_model(
+            config=config,
+            dm=dm,
+            train_helper=False,
+            train_with_DP=config.audit.target.train_with_DP
+        )
+
+    # train the helper model
+    if os.path.exists(config.audit.helper.saving_dir):
+        helper_model = AutoModelForCausalLM.from_pretrained(config.audit.helper.saving_dir)
+    else:
+        helper_model = train_audit_model(
+            config=config,
+            dm=dm,
+            train_helper=True,
+            train_with_DP=False
+        )
 
     # --------------------
     # Part 4. MIA/Baseline Attack
     # --------------------
+
+    # instantiate audit model objects
 
     # attack()
 

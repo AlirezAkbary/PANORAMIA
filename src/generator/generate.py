@@ -6,6 +6,7 @@ import torch
 import pandas as pd
 
 from src.datasets.datamodule import PANORAMIADataModule
+from src.generator.utils import check_length_to_block_size
 
 device = 'cpu'
 if torch.cuda.is_available():
@@ -100,4 +101,11 @@ def generate_synthetic_samples(
 
             df = pd.concat([df, pd.DataFrame.from_dict(row)], ignore_index=True)
     
+    # decoding and ecoding back are not necessarily inverse of each other. Hence, we check that samples would be of length after encoding.
+    df = check_length_to_block_size(
+        df,
+        dm.tokenizer,
+        config.dataset.block_size
+    )
+
     df.to_csv(output_file_path)

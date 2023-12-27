@@ -1,6 +1,6 @@
 base:
-  log_dir: /home/aaa208/scratch/PANORAMIA/experiments/WikiText-2/RMFN/
-  project_name: PANORAMIA-Wiki-Text-2-RMFN
+  log_dir: /home/aaa208/scratch/PANORAMIA/experiments/WikiText-2/RMFMRNFN/
+  project_name: PANORAMIA-Wiki-Text-2-RMFMRNFN
 dataset:
   path: wikitext
   name: wikitext-2-raw-v1
@@ -17,9 +17,9 @@ dataset:
   mia_num_train : 500
   mia_num_val : 500
   mia_num_test : 1000
-  include_synthetic: False
+  include_synthetic: True
   audit_mode:  ~
-  num_syn_canary: ~
+  num_syn_canary: 2241
 generator:
   train:
     pretrained_model_name_or_path: gpt2
@@ -48,9 +48,9 @@ generator:
 audit:
   target:
     pretrained_model_name_or_path: gpt2
-    saving_dir: /home/aaa208/scratch/PANORAMIA/outputs/WikiText-2/audit_model/target_e60/saved_model/
+    saving_dir: /home/aaa208/scratch/PANORAMIA/outputs/WikiText-2/audit_model/target_with_Syn/saved_model/
     seed: 42
-    run_name: target_epoch_60_block_size_64
+    run_name: target_epoch_60_block_size_64_syn_in_2241
     train_with_DP: False
     optimization: 
       learning_rate: 0.00002
@@ -63,9 +63,9 @@ audit:
       save_total_limit: ~
   helper:
     pretrained_model_name_or_path: gpt2
-    saving_dir: /home/aaa208/scratch/PANORAMIA/outputs/WikiText-2/audit_model/helper/saved_model/
+    saving_dir: /home/aaa208/scratch/PANORAMIA/outputs/WikiText-2/audit_model/helper/saved_model/epoch_30/checkpoint-726/
     seed: 42
-    run_name: helper_block_size_64
+    run_name: ~ #it should be already trained with RMFN (we don't need to include syn in helper). Update the saving_dir
     optimization:
       learning_rate: 0.00002
       weight_decay: 0.01

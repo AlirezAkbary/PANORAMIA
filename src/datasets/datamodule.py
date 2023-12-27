@@ -195,7 +195,6 @@ class PANORAMIADataModule:
     def _convert_percent_to_index(percentage, length):
         return length * percentage // 100
 
-
     def get_generator_training_offset(self):
         return self._convert_percent_to_index(self.generator_train_percent, len(self.shuffled_chunked_datasets_dict['train']))
 
@@ -205,8 +204,17 @@ class PANORAMIADataModule:
     def get_target_model_training_offset(self):
         return self._convert_percent_to_index(self.target_model_percent, len(self.shuffled_chunked_datasets_dict['train']))
 
-    def get_helper_model_first_index(self):
-        return self._convert_percent_to_index((100 - self.helper_model_percent), len(self.shuffled_chunked_datasets_dict['train']))
+    def get_helper_model_offset(self):
+        return self._convert_percent_to_index(self.target_model_percent + self.helper_model_percent, len(self.shuffled_chunked_datasets_dict['train']))
+    
+    def get_syn_in_offset(self):
+        # indices of synthetic samples included in the target model 0:self.num_syn_canary
+        return self.num_syn_canary
+
+    def _split_syn_dataset_in_out(self):
+        syn_in_dataset = self.shuffled_synthetic_dataset.select(range(self.get_syn_in_offset()))
+        syn_out_dataset = self.shuffled_synthetic_dataset.select(range(self.get_syn_in_offset(), len(self.shuffled_synthetic_dataset)))
+        return syn_in_dataset, syn_out_dataset
 
     def get_target_model_datasets(self):
         # last index of the allocated dataset to the target model
@@ -218,21 +226,48 @@ class PANORAMIADataModule:
         val_dataset = self.shuffled_chunked_datasets_dict['validation'].select(range(val_offset))
         test_dataset = None
 
-        
         if self.include_synthetic:
             logging.info(f"including {self.num_syn_canary} synthetic samples into the target model...")
-            raise NotImplementedError
-        
+            syn_in_dataset, syn_out_dataset = self._split_syn_dataset_in_out()
+            train_dataset = concatenate_datasets([train_dataset, syn_in_dataset])
+
+        # set the labels to input_ids (the task is language modeling)
+        train_dataset = train_dataset.add_column('labels', train_dataset['input_ids'].copy())
+        val_dataset = val_dataset.add_column('labels', val_dataset['input_ids'].copy())
+
+        logging.info(f"ُTarget model train dataset:\n{train_dataset}")
+        logging.info(f"Target model validation dataset:\n{val_dataset}")
+
         return train_dataset, val_dataset, test_dataset
 
     def get_target_model_dataloaders(self):
-        pass
+        raise NotImplementedError
 
     def get_helper_model_dataset(self):
-        pass
+        # last index of the allocated dataset to the target model
+        target_train_offset = self.get_target_model_training_offset()
+        target_val_offset = self._convert_percent_to_index(self.target_model_percent, len(self.shuffled_chunked_datasets_dict['validation']))
+
+        # last index of the allocated dataset to the helper model
+        helper_train_offset = self.get_helper_model_offset()
+        helper_val_offset = self._convert_percent_to_index(self.target_model_percent + self.helper_model_percent, len(self.shuffled_chunked_datasets_dict['validation']))
+
+        # selecting the datasets 
+        train_dataset = self.shuffled_chunked_datasets_dict['train'].select(range(target_train_offset, helper_train_offset))
+        val_dataset = self.shuffled_chunked_datasets_dict['validation'].select(range(target_val_offset, helper_val_offset))
+        test_dataset = None
+        
+        # set the labels to input_ids (the task is language modeling)
+        train_dataset = train_dataset.add_column('labels', train_dataset['input_ids'].copy())
+        val_dataset = val_dataset.add_column('labels', val_dataset['input_ids'].copy())
+
+        logging.info(f"Helper model train dataset:\n{train_dataset}")
+        logging.info(f"Helper model validation dataset:\n{val_dataset}")
+
+        return train_dataset, val_dataset, test_dataset
 
     def get_helper_model_dataloaders(self):
-        pass
+        raise NotImplementedError
 
     def get_generator_training_datasets(self):
         # TODO: should the validation be the same split?

@@ -57,9 +57,9 @@ def train_audit_model(
 
 
     if train_with_DP:
-        DP_training()
+        return DP_training()
     else:
-        regular_training(training_args, train_dataset, validation_dataset, train_helper)
+        return regular_training(config, training_args, train_dataset, validation_dataset, train_helper)
 
     
     

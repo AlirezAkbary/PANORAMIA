@@ -14,7 +14,7 @@ def setup_model(
     Return a callable for model_init parameter
     This function needs to be extended for supporting different audit models.
     """
-    return lambda: AutoModelForCausalLM.from_pretrained(config.train.pretrained_model_name_or_path)
+    return lambda: AutoModelForCausalLM.from_pretrained(config.pretrained_model_name_or_path)
 
 
 def DP_training():
@@ -59,3 +59,5 @@ def regular_training(config, training_args, train_dataset, validation_dataset, t
     eval_results = trainer.evaluate()
     logging.info(f"Evaluation results:\n{eval_results}")
     logging.info(f"Perplexity: {math.exp(eval_results['eval_loss']):.2f}")
+
+    return trainer.model
