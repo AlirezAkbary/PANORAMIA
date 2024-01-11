@@ -4,6 +4,9 @@ panoramia_venv
 # wandb local directory
 wandb
 
+# analysis files
+src/analysis
+
 # random generated files
 __pycache__
 .vscode

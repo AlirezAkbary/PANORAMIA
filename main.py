@@ -1,16 +1,19 @@
 import logging
 import os
-import sys
+from datetime import datetime
 
 import yaml
 from easydict import EasyDict
 from transformers import AutoModelForCausalLM
 
-from arguments import init_args
+from arguments import init_args, args_to_nested_dict
 from src.datasets.datamodule import PANORAMIADataModule
 from src.generator.train import fine_tune_generator
 from src.generator.generate import generate_synthetic_samples
 from src.audit_model.train import train_audit_model
+from src.audit_model.audit import AuditModelGPT2CLM
+from src.attacks.train import train_attack
+
 
 def main(config: EasyDict):
     """
@@ -21,8 +24,6 @@ def main(config: EasyDict):
         **config.dataset
     )
     
-    
-
     # --------------------
     # Part 1. Generative Model Training/Loading
     # --------------------
@@ -81,8 +82,58 @@ def main(config: EasyDict):
     # --------------------
 
     # instantiate audit model objects
+    target_audit_model = AuditModelGPT2CLM(
+        model=target_model,
+        embedding_type=config.audit.target.embedding_type,
+        block_size=dm.block_size
+    )
 
-    # attack()
+    helper_audit_model = AuditModelGPT2CLM(
+        model=helper_model,
+        embedding_type=config.audit.helper.embedding_type,
+        block_size=dm.block_size
+    )
+    
+    # train the baseline and mia
+
+    # updating parameters based on the input seed
+    config.attack.baseline.training_args.output_dir = os.path.join(
+        config.attack.baseline.training_args.output_dir, 
+        f'{config.base.project_name}/', 
+        f'seed_{config.attack.baseline.training_args.seed}/'
+    )
+    config.attack.mia.training_args.output_dir = os.path.join(
+        config.attack.mia.training_args.output_dir, 
+        f'{config.base.project_name}/', 
+        f'seed_{config.attack.mia.training_args.seed}/'
+    )
+
+    if os.path.exists(config.attack.baseline.training_args.output_dir):
+        ...
+    else:
+        baseline_trainer = train_attack(
+            config=config,
+            dm=dm,
+            audit_model=helper_audit_model,
+            train_baseline=True
+        )
+    
+    if os.path.exists(config.attack.mia.training_args.output_dir):
+        ...
+    else:
+        mia_trainer = train_attack(
+            config=config,
+            dm=dm,
+            audit_model=target_audit_model,
+            train_baseline=False
+        )
+    
+    # audit 
+
+    
+    
+
+    
 
 
 
@@ -99,18 +150,18 @@ if __name__ == "__main__":
         with open(args.path_yml_config, 'r') as stream:
             config = yaml.safe_load(stream)
     else:
-        # TODO
-        raise NotImplementedError
-    
+        config = args_to_nested_dict(args)
+        
     # convert normal dictionary of config to attribute dictionary
     config = EasyDict(config)
+    
 
     # Setup logging directory
     os.makedirs(config.base.log_dir, exist_ok=True)
     logging.basicConfig(
         filename=os.path.join(
             config.base.log_dir,
-            "output.log"
+            f'output_{datetime.now().strftime("%d_%m_%Y-%H_%M_%S_%f")}.log'
         ),
         filemode='w',
         level=logging.INFO,

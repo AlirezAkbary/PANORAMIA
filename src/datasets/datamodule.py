@@ -216,6 +216,21 @@ class PANORAMIADataModule:
         syn_out_dataset = self.shuffled_synthetic_dataset.select(range(self.get_syn_in_offset(), len(self.shuffled_synthetic_dataset)))
         return syn_in_dataset, syn_out_dataset
 
+    def get_real_member_audit_dataset(self):
+        train_offset = self.get_target_model_training_offset()
+        generator_prompting_offset = self.get_generator_prompting_offset()
+        return self.shuffled_chunked_datasets_dict['train'].select(range(generator_prompting_offset, train_offset))
+
+    def get_length_real_member_audit_dataset(self):
+        return len(self.get_real_member_audit_dataset())
+
+    def get_real_non_member_audit_dataset(self):
+        helper_train_offset = self.get_helper_model_offset()
+        return self.shuffled_chunked_datasets_dict['train'].select(range(helper_train_offset, len(self.shuffled_chunked_datasets_dict['train'])))
+    
+    def get_length_real_non_member_audit_dataset(self):
+        return len(self.get_real_non_member_audit_dataset())
+
     def get_target_model_datasets(self):
         # last index of the allocated dataset to the target model
         train_offset = self.get_target_model_training_offset()
@@ -311,11 +326,196 @@ class PANORAMIADataModule:
         return DataLoader(torch_prompt_dataset, batch_size=batch_size, shuffle=True)
         
 
+    def _check_split_limit(self):
+        ...
+    
     def get_mia_datasets(self):
-        pass
+        generator_prompting_offset = self.get_generator_prompting_offset()
+        target_train_offset = self.get_target_model_training_offset()
+        if self.audit_mode == 'RMFN':
+            if self.include_synthetic == True:
+                ...
+            else:
+                RM_train = self.shuffled_chunked_datasets_dict['train'].select(
+                    range(generator_prompting_offset, generator_prompting_offset + self.mia_num_train)
+                    )
+                RM_val = self.shuffled_chunked_datasets_dict['train'].select(
+                    range(target_train_offset - self.mia_num_test - self.mia_num_val, target_train_offset - self.mia_num_test)
+                    )  
+                RM_test = self.shuffled_chunked_datasets_dict['train'].select(
+                    range(target_train_offset - self.mia_num_test, target_train_offset)
+                    )
+                    
+        elif self.audit_mode == 'RMRN':
+            raise NotImplementedError
+        elif self.audit_mode == 'RMFMRNFN':
+            assert self.include_synthetic == True, "The target model needs to have synthetic samples inside the target trainin set"
+            
+            # choosing members (+1 label) for train, val, test 
+            real_member_audit_dataset_length = self.get_length_real_member_audit_dataset()
+            
+            RM_train = self.get_real_member_audit_dataset().select(
+                range(self.mia_num_train // 2) # mia_num_train is per class
+            )
+            RM_val = self.get_real_member_audit_dataset().select(
+                range(real_member_audit_dataset_length - (self.mia_num_test//2) - (self.mia_num_val//2), real_member_audit_dataset_length - (self.mia_num_test//2))
+            )
+            RM_test = self.get_real_member_audit_dataset().select(
+                range(real_member_audit_dataset_length - (self.mia_num_test//2), real_member_audit_dataset_length)
+            )
+
+            syn_in_dataset, syn_out_dataset = self._split_syn_dataset_in_out()
+
+            FM_train = syn_in_dataset.select(
+                range(self.mia_num_train // 2)
+            )
+            FM_val = syn_in_dataset.select(
+                range(self.num_syn_canary - (self.mia_num_test//2) - (self.mia_num_val//2), self.num_syn_canary - (self.mia_num_test//2))
+            )
+            FM_test = syn_in_dataset.select(
+                range(self.num_syn_canary - (self.mia_num_test//2), self.num_syn_canary)
+            )
+
+            # setting the labels
+            M_train = concatenate_datasets([RM_train, FM_train])
+            M_val = concatenate_datasets([RM_val, FM_val])
+
+            M_train = M_train.add_column("labels", [1.]*len(M_train))
+            M_val = M_val.add_column("labels", [1.]*len(M_val))
+            
+
+            # choosing non-members (0 label) for train, val, test 
+            real_non_member_audit_dataset_length = self.get_length_real_non_member_audit_dataset()
+
+            RN_train = self.get_real_non_member_audit_dataset().select(
+                range(self.mia_num_train // 2) # mia_num_train is per class
+            )
+            RN_val = self.get_real_non_member_audit_dataset().select(
+                range(real_non_member_audit_dataset_length - (self.mia_num_test//2) - (self.mia_num_val//2), real_non_member_audit_dataset_length - (self.mia_num_test//2))
+            )
+            RN_test = self.get_real_non_member_audit_dataset().select(
+                range(real_non_member_audit_dataset_length - (self.mia_num_test//2), real_non_member_audit_dataset_length)
+            )
+
+            syn_out_length = len(syn_out_dataset)
+            FN_train = syn_out_dataset.select(
+                range(self.mia_num_train // 2)
+            )
+            FN_val = syn_out_dataset.select(
+                range(syn_out_length - (self.mia_num_test//2) - (self.mia_num_val//2), syn_out_length - (self.mia_num_test//2))
+            )
+            FN_test = syn_out_dataset.select(
+                range(syn_out_length - (self.mia_num_test//2), syn_out_length)
+            )
+
+            # setting the labels
+
+            N_train = concatenate_datasets([RN_train, FN_train])
+            N_val = concatenate_datasets([RN_val, FN_val])
+
+            N_train = N_train.add_column("labels", [0.]*len(N_train))
+            N_val = N_val.add_column("labels", [0.]*len(N_val))
+
+            # merging
+            train = concatenate_datasets([M_train, N_train])
+            val = concatenate_datasets([M_val, N_val])
+
+            # use PANORAMIA game for the test set
+            test = self.PANORAMIA_auditing_game(
+                x_in=concatenate_datasets([RM_test, FM_test]),
+                x_gen=concatenate_datasets([RN_test, FN_test]),
+                m=self.mia_num_test
+            )
+
+            logging.info(f"Providing the audit datasets in RMFMRNFN mode with the following details:")
+            logging.info(f"Train dataset:\n{train}")
+            logging.info(f"Validation dataset:\n{val}")
+            logging.info(f"Test dataset:\n{test}")
+
+            return train.with_format("torch"), val.with_format("torch"), test.with_format("torch")
+
+
+        elif self.audit_mode == 'FMFN':
+            raise NotImplementedError
+        elif self.audit_mode == 'RMFMFN':
+            assert self.include_synthetic == True, "The target model needs to have synthetic samples inside the target trainin set"
+            
+            # choosing members (+1 label) for train, val, test 
+            real_member_audit_dataset_length = self.get_length_real_member_audit_dataset()
+            
+            RM_train = self.get_real_member_audit_dataset().select(
+                range(self.mia_num_train // 2) # mia_num_train is per class
+            )
+            RM_val = self.get_real_member_audit_dataset().select(
+                range(real_member_audit_dataset_length - (self.mia_num_test//2) - (self.mia_num_val//2), real_member_audit_dataset_length - (self.mia_num_test//2))
+            )
+            RM_test = self.get_real_member_audit_dataset().select(
+                range(real_member_audit_dataset_length - (self.mia_num_test//2), real_member_audit_dataset_length)
+            )
+
+            syn_in_dataset, syn_out_dataset = self._split_syn_dataset_in_out()
+
+            FM_train = syn_in_dataset.select(
+                range(self.mia_num_train // 2)
+            )
+            FM_val = syn_in_dataset.select(
+                range(self.num_syn_canary - (self.mia_num_test//2) - (self.mia_num_val//2), self.num_syn_canary - (self.mia_num_test//2))
+            )
+            FM_test = syn_in_dataset.select(
+                range(self.num_syn_canary - (self.mia_num_test//2), self.num_syn_canary)
+            )
+
+            # setting the labels
+            M_train = concatenate_datasets([RM_train, FM_train])
+            M_val = concatenate_datasets([RM_val, FM_val])
+
+            M_train = M_train.add_column("labels", [1.]*len(M_train))
+            M_val = M_val.add_column("labels", [1.]*len(M_val))
+            
+
+            # choosing non-members (0 label) for train, val, test 
+
+            syn_out_length = len(syn_out_dataset)
+            FN_train = syn_out_dataset.select(
+                range(self.mia_num_train)
+            )
+            FN_val = syn_out_dataset.select(
+                range(syn_out_length - (self.mia_num_test) - (self.mia_num_val), syn_out_length - (self.mia_num_test))
+            )
+            FN_test = syn_out_dataset.select(
+                range(syn_out_length - (self.mia_num_test), syn_out_length)
+            )
+
+            # setting the labels
+
+            N_train = FN_train
+            N_val = FN_val
+
+            N_train = N_train.add_column("labels", [0.]*len(N_train))
+            N_val = N_val.add_column("labels", [0.]*len(N_val))
+
+            # merging
+            train = concatenate_datasets([M_train, N_train])
+            val = concatenate_datasets([M_val, N_val])
+
+            # use PANORAMIA game for the test set
+            test = self.PANORAMIA_auditing_game(
+                x_in=concatenate_datasets([RM_test, FM_test]),
+                x_gen=FN_test,
+                m=self.mia_num_test
+            )
+
+            logging.info(f"Providing the audit datasets in RMFMFN mode with the following details:")
+            logging.info(f"Train dataset:\n{train}")
+            logging.info(f"Validation dataset:\n{val}")
+            logging.info(f"Test dataset:\n{test}")
+
+            return train.with_format("torch"), val.with_format("torch"), test.with_format("torch")
+        else:
+            raise NotImplementedError
 
     def get_mia_dataloaders(self):
-        pass
+        raise NotImplementedError
 
     def PANORAMIA_auditing_game(self, 
     x_in: Dataset, 
@@ -331,23 +531,24 @@ class PANORAMIADataModule:
         
 
         # m random binary bits
-        s = np.random.randint(0, 2, size=m).tolist()
+        s = np.random.randint(0, 2, size=m).astype("float").tolist()
         
         # adding s to the datasets to filter them based on the bits
         x_in = x_in.add_column("labels", s)
         x_gen = x_gen.add_column("labels", s)
 
         # filter samples based on the coin flips
-        picked_x_in = x_in.filter(lambda example: example['labels'] == 1)
-        picked_x_gen = x_gen.filter(lambda example: example['labels'] == 0)
+        picked_x_in = x_in.filter(lambda example: example['labels'] == 1.)
+        picked_x_gen = x_gen.filter(lambda example: example['labels'] == 0.)
 
         # attaching the chosen samples from each pair together
         x = concatenate_datasets([picked_x_in, picked_x_gen])
 
         # shuffle dataset 
+        # TODO: Reproducibility?
         x = x.shuffle()
 
         logging.info(f"Auditing set:\n{x}")
 
         # TODO: should it be returned in torch format? 
-        return x.shuffle()
+        return x
