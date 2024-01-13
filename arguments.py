@@ -26,10 +26,12 @@ def add_dataset_args(parser):
     parser.add_argument('--dataset_prompt_sampling_percent', type=int, help='', default=12)
     parser.add_argument('--dataset_target_model_percent', type=int, help='', default=45)
     parser.add_argument('--dataset_helper_model_percent', type=int, help='', default=45)
+    parser.add_argument('--dataset_helper_model_train_data_mode', type=str, help='', default='syn')
+    parser.add_argument('--dataset_syn_audit_percent', type=int, help='', default=20)
     parser.add_argument('--dataset_mia_num_train', type=int, help='', default=500)
     parser.add_argument('--dataset_mia_num_val', type=int, help='', default=500)
     parser.add_argument('--dataset_mia_num_test', type=int, help='', default=1000)
-    parser.add_argument('--dataset_include_synthetic', action='store_true', help='', default=True)
+    parser.add_argument('--dataset_include_synthetic', action='store_true', help='', default=False)
     parser.add_argument('--dataset_audit_mode', type=str, help='', default='RMFMRNFN')
     parser.add_argument('--dataset_num_syn_canary', type=int, help='', default=2241)
     

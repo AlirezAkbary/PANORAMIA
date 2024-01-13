@@ -4,7 +4,7 @@ base:
 dataset:
   path: wikitext
   name: wikitext-2-raw-v1
-  path_to_synthetic_data: ~
+  path_to_synthetic_data: /home/aaa208/scratch/PANORAMIA/outputs/WikiText-2/generator/helper_with_syn/saved_synthetic_data/syn_data.csv
   synthetic_text_column_name: text
   seed: 42
   do_shuffle: True
@@ -13,15 +13,15 @@ dataset:
   generator_train_percent: 22
   prompt_sampling_percent: 12
   target_model_percent: 45
-  helper_model_percent: 45
+  helper_model_percent: 100 # in this case, this is the whole dataset of syn_helper
   helper_model_train_data_mode: 'syn'
   syn_audit_percent: 20
-  mia_num_train : 250
-  mia_num_val : 250
-  mia_num_test : 500
-  include_synthetic: True
-  audit_mode:  RMFMRNFN
-  num_syn_canary: 2241
+  mia_num_train : 500
+  mia_num_val : 500
+  mia_num_test : 1000
+  include_synthetic: False
+  audit_mode:  RMFN
+  num_syn_canary: ~
 generator:
   train:
     pretrained_model_name_or_path: gpt2
@@ -50,7 +50,7 @@ generator:
 audit:
   target:
     pretrained_model_name_or_path: gpt2
-    saving_dir: /home/aaa208/scratch/PANORAMIA/outputs/WikiText-2/audit_model/target_e60/saved_model/
+    saving_dir: /home/aaa208/scratch/PANORAMIA/outputs/WikiText-2/audit_model/target_e60/saved_model/epoch_60/
     seed: 42
     run_name: target_epoch_60_block_size_64
     train_with_DP: False
@@ -66,16 +66,16 @@ audit:
       save_total_limit: ~
   helper:
     pretrained_model_name_or_path: gpt2
-    saving_dir: /home/aaa208/scratch/PANORAMIA/outputs/WikiText-2/audit_model/helper/saved_model/epoch_30/checkpoint-726/
+    saving_dir: /home/aaa208/scratch/PANORAMIA/outputs/WikiText-2/audit_model/helper_with_syn/saved_model/epoch_30/checkpoint-1645
     seed: 42
-    run_name: ~ #it should be already trained with RMFN (we don't need to include syn in helper). Update the saving_dir
+    run_name: helper_with_syn_helper_percent_100 
     embedding_type: loss_seq
     optimization:
       learning_rate: 0.00002
       weight_decay: 0.01
       warmup_steps: 100
       batch_size: 64
-      epoch: 15
+      epoch: 30
       save_strategy: epoch
       load_best_model_at_end: True
       save_total_limit: 1
@@ -83,10 +83,10 @@ attack:
   mia:
     net_type: mix
     distinguisher_type: GPT2Distinguisher
-    run_name: RMFMRNFN
+    run_name: RMFN
     training_args:
       seed: 0  #check
-      output_dir: /scratch/aaa208/PANORAMIA/outputs/WikiText-2/attacks/
+      output_dir: /scratch/aaa208/PANORAMIA/outputs/WikiText-2/attacks/helper_with_syn/
       max_steps: 500
       batch_size: 32
       warmup_steps: 500
@@ -105,10 +105,10 @@ attack:
   baseline:
     net_type: mix
     distinguisher_type: GPT2Distinguisher
-    run_name: RMFMRNFN
+    run_name: RMFN
     training_args:
       seed: 0  #check
-      output_dir: /scratch/aaa208/PANORAMIA/outputs/WikiText-2/attacks/
+      output_dir: /scratch/aaa208/PANORAMIA/outputs/WikiText-2/attacks/helper_with_syn/
       max_steps: 500
       batch_size: 32
       warmup_steps: 500

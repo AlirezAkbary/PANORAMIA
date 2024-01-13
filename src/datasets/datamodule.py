@@ -42,6 +42,8 @@ class PANORAMIADataModule:
         prompt_sampling_percent: int = 13,
         target_model_percent: int = 50,
         helper_model_percent: int = 50,
+        helper_model_train_data_mode: str = 'syn',
+        syn_audit_percent: int = 30,
         mia_num_train : int = 500,
         mia_num_val : int = 500,
         mia_num_test : int = 1000,
@@ -68,6 +70,8 @@ class PANORAMIADataModule:
         self.prompt_sampling_percent = prompt_sampling_percent
         self.target_model_percent = target_model_percent
         self.helper_model_percent = helper_model_percent
+        self.helper_model_train_data_mode = helper_model_train_data_mode
+        self.syn_audit_percent = syn_audit_percent
         self.mia_num_train = mia_num_train
         self.mia_num_val = mia_num_val
         self.mia_num_test = mia_num_test # m in theory
@@ -205,16 +209,42 @@ class PANORAMIADataModule:
         return self._convert_percent_to_index(self.target_model_percent, len(self.shuffled_chunked_datasets_dict['train']))
 
     def get_helper_model_offset(self):
-        return self._convert_percent_to_index(self.target_model_percent + self.helper_model_percent, len(self.shuffled_chunked_datasets_dict['train']))
-    
+        if self.helper_model_train_data_mode == 'real':
+            return self._convert_percent_to_index(self.target_model_percent + self.helper_model_percent, len(self.shuffled_chunked_datasets_dict['train']))
+        else:
+            raise NotImplementedError
+
     def get_syn_in_offset(self):
         # indices of synthetic samples included in the target model 0:self.num_syn_canary
         return self.num_syn_canary
 
-    def _split_syn_dataset_in_out(self):
-        syn_in_dataset = self.shuffled_synthetic_dataset.select(range(self.get_syn_in_offset()))
-        syn_out_dataset = self.shuffled_synthetic_dataset.select(range(self.get_syn_in_offset(), len(self.shuffled_synthetic_dataset)))
+    def _split_syn_audit_helper(self):
+        syn_audit_offset = self._convert_percent_to_index(
+            self.syn_audit_percent, 
+            len(self.shuffled_synthetic_dataset)
+        )
+        syn_audit = self.shuffled_synthetic_dataset.select(range(syn_audit_offset))
+        syn_helper = self.shuffled_synthetic_dataset.select(range(syn_audit_offset, len(self.shuffled_synthetic_dataset)))
+        return syn_audit, syn_helper
+
+    def _split_syn_audit_dataset_in_out(self):
+        syn_audit, _ = self._split_syn_audit_helper()
+        syn_in_dataset = syn_audit.select(range(self.get_syn_in_offset()))
+        syn_out_dataset = syn_audit.select(range(self.get_syn_in_offset(), len(syn_audit)))
         return syn_in_dataset, syn_out_dataset
+    
+    def _split_syn_helper_train_val(self):
+        _, syn_helper = self._split_syn_audit_helper()
+
+        # TODO: hardcoding the number of validation samples. Modify it later
+        num_validation = 1800
+
+        syn_train_offset = self._convert_percent_to_index(self.helper_model_percent, len(syn_helper)-1800)
+
+        syn_helper_train = syn_helper.select(range(syn_train_offset))
+        syn_helper_val = syn_helper.select(range(len(syn_helper) - num_validation, len(syn_helper)))
+        syn_helper_test = None
+        return syn_helper_train, syn_helper_val, syn_helper_test
 
     def get_real_member_audit_dataset(self):
         train_offset = self.get_target_model_training_offset()
@@ -243,7 +273,7 @@ class PANORAMIADataModule:
 
         if self.include_synthetic:
             logging.info(f"including {self.num_syn_canary} synthetic samples into the target model...")
-            syn_in_dataset, syn_out_dataset = self._split_syn_dataset_in_out()
+            syn_in_dataset, syn_out_dataset = self._split_syn_audit_dataset_in_out()
             train_dataset = concatenate_datasets([train_dataset, syn_in_dataset])
 
         # set the labels to input_ids (the task is language modeling)
@@ -259,25 +289,42 @@ class PANORAMIADataModule:
         raise NotImplementedError
 
     def get_helper_model_dataset(self):
-        # last index of the allocated dataset to the target model
-        target_train_offset = self.get_target_model_training_offset()
-        target_val_offset = self._convert_percent_to_index(self.target_model_percent, len(self.shuffled_chunked_datasets_dict['validation']))
+        # TODO: assert helper model train data mode is consistent with helper model percent
+        if self.helper_model_train_data_mode == 'real':
 
-        # last index of the allocated dataset to the helper model
-        helper_train_offset = self.get_helper_model_offset()
-        helper_val_offset = self._convert_percent_to_index(self.target_model_percent + self.helper_model_percent, len(self.shuffled_chunked_datasets_dict['validation']))
+            # last index of the allocated dataset to the target model
+            target_train_offset = self.get_target_model_training_offset()
+            target_val_offset = self._convert_percent_to_index(self.target_model_percent, len(self.shuffled_chunked_datasets_dict['validation']))
 
-        # selecting the datasets 
-        train_dataset = self.shuffled_chunked_datasets_dict['train'].select(range(target_train_offset, helper_train_offset))
-        val_dataset = self.shuffled_chunked_datasets_dict['validation'].select(range(target_val_offset, helper_val_offset))
-        test_dataset = None
+            # last index of the allocated dataset to the helper model
+            helper_train_offset = self.get_helper_model_offset()
+            helper_val_offset = self._convert_percent_to_index(self.target_model_percent + self.helper_model_percent, len(self.shuffled_chunked_datasets_dict['validation']))
+
+            # selecting the datasets 
+            train_dataset = self.shuffled_chunked_datasets_dict['train'].select(range(target_train_offset, helper_train_offset))
+            val_dataset = self.shuffled_chunked_datasets_dict['validation'].select(range(target_val_offset, helper_val_offset))
+            test_dataset = None
+            
+            
+
+            logging.info(f"Helper model with real train dataset:\n{train_dataset}")
+            logging.info(f"Helper model with real validation dataset:\n{val_dataset}")
+
+            
+        
+        elif self.helper_model_train_data_mode == 'syn':
+            train_dataset, val_dataset, test_dataset = self._split_syn_helper_train_val()
+
+            logging.info(f"Helper model with synthetic train dataset:\n{train_dataset}")
+            logging.info(f"Helper model with synthetic validation dataset:\n{val_dataset}")
+
+            
+        else:
+            raise NotImplementedError
         
         # set the labels to input_ids (the task is language modeling)
         train_dataset = train_dataset.add_column('labels', train_dataset['input_ids'].copy())
         val_dataset = val_dataset.add_column('labels', val_dataset['input_ids'].copy())
-
-        logging.info(f"Helper model train dataset:\n{train_dataset}")
-        logging.info(f"Helper model validation dataset:\n{val_dataset}")
 
         return train_dataset, val_dataset, test_dataset
 
@@ -336,15 +383,58 @@ class PANORAMIADataModule:
             if self.include_synthetic == True:
                 ...
             else:
-                RM_train = self.shuffled_chunked_datasets_dict['train'].select(
-                    range(generator_prompting_offset, generator_prompting_offset + self.mia_num_train)
-                    )
-                RM_val = self.shuffled_chunked_datasets_dict['train'].select(
-                    range(target_train_offset - self.mia_num_test - self.mia_num_val, target_train_offset - self.mia_num_test)
-                    )  
-                RM_test = self.shuffled_chunked_datasets_dict['train'].select(
-                    range(target_train_offset - self.mia_num_test, target_train_offset)
-                    )
+                # choosing members (+1 label) for train, val, test 
+                real_member_audit_dataset_length = self.get_length_real_member_audit_dataset()
+                
+                RM_train = self.get_real_member_audit_dataset().select(
+                    range(self.mia_num_train) 
+                )
+                RM_val = self.get_real_member_audit_dataset().select(
+                    range(real_member_audit_dataset_length - (self.mia_num_test) - (self.mia_num_val), real_member_audit_dataset_length - (self.mia_num_test))
+                )
+                RM_test = self.get_real_member_audit_dataset().select(
+                    range(real_member_audit_dataset_length - (self.mia_num_test), real_member_audit_dataset_length)
+                )
+                
+                # setting the labels
+                RM_train = RM_train.add_column("labels", [1.]*len(RM_train))
+                RM_val = RM_val.add_column("labels", [1.]*len(RM_val))
+
+                syn_audit, _ = self._split_syn_audit_helper()
+
+                FN_train = syn_audit.select(
+                    range(self.mia_num_train) 
+                )
+
+                FN_val = syn_audit.select(
+                    range(len(syn_audit) - (self.mia_num_test) - (self.mia_num_val), len(syn_audit) - (self.mia_num_test))
+                )
+
+                FN_test = syn_audit.select(
+                    range(len(syn_audit) - (self.mia_num_test), len(syn_audit))
+                )
+
+                # setting the labels
+                FN_train = FN_train.add_column("labels", [0.]*len(FN_train))
+                FN_val = FN_val.add_column("labels", [0.]*len(FN_val))
+
+                # merging
+                train = concatenate_datasets([RM_train, FN_train])
+                val = concatenate_datasets([RM_val, FN_val])
+
+                # use PANORAMIA game for the test set
+                test = self.PANORAMIA_auditing_game(
+                    x_in=RM_test,
+                    x_gen=FN_test,
+                    m=self.mia_num_test
+                )
+
+                logging.info(f"Providing the audit datasets in RMFN mode with the following details:")
+                logging.info(f"Train dataset:\n{RM_train}")
+                logging.info(f"Validation dataset:\n{val}")
+                logging.info(f"Test dataset:\n{test}")
+
+                return train.with_format("torch"), val.with_format("torch"), test.with_format("torch")
                     
         elif self.audit_mode == 'RMRN':
             raise NotImplementedError
@@ -364,7 +454,7 @@ class PANORAMIADataModule:
                 range(real_member_audit_dataset_length - (self.mia_num_test//2), real_member_audit_dataset_length)
             )
 
-            syn_in_dataset, syn_out_dataset = self._split_syn_dataset_in_out()
+            syn_in_dataset, syn_out_dataset = self._split_syn_audit_dataset_in_out()
 
             FM_train = syn_in_dataset.select(
                 range(self.mia_num_train // 2)
@@ -453,7 +543,7 @@ class PANORAMIADataModule:
                 range(real_member_audit_dataset_length - (self.mia_num_test//2), real_member_audit_dataset_length)
             )
 
-            syn_in_dataset, syn_out_dataset = self._split_syn_dataset_in_out()
+            syn_in_dataset, syn_out_dataset = self._split_syn_audit_dataset_in_out()
 
             FM_train = syn_in_dataset.select(
                 range(self.mia_num_train // 2)

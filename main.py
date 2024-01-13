@@ -51,9 +51,9 @@ def main(config: EasyDict):
     # del the generator model from memory
     del generator_model
 
-    # --------------------
-    # Part 3. Train/Load Audit Model
-    # --------------------
+    # # --------------------
+    # # Part 3. Train/Load Audit Model
+    # # --------------------
 
     # train the target model
     if os.path.exists(config.audit.target.saving_dir):
@@ -77,9 +77,9 @@ def main(config: EasyDict):
             train_with_DP=False
         )
 
-    # --------------------
-    # Part 4. MIA/Baseline Attack
-    # --------------------
+    # # --------------------
+    # # Part 4. MIA/Baseline Attack
+    # # --------------------
 
     # instantiate audit model objects
     target_audit_model = AuditModelGPT2CLM(

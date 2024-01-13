@@ -49,7 +49,8 @@ def train_attack(
             project=config.base.project_name,
             group='baseline' if train_baseline else 'mia',
             name=attack_config.run_name,
-            config=attack_config.training_args
+            config=attack_config.training_args,
+            reinit=True
         )
 
     # training is dependent on net_type
