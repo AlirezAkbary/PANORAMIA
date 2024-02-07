@@ -10,7 +10,8 @@ def add_load_args(parser):
 def add_base_args(parser):
     parser.add_argument("--base_log_dir", type=str, help='Path to where the log file would be saved')
     parser.add_argument("--base_project_name", type=str, help='Project name for wandb logging')
-    
+    parser.add_argument("--base_attack_main", type=str, help='', default='baseline')
+
     return parser
 
 def add_dataset_args(parser):
@@ -34,6 +35,10 @@ def add_dataset_args(parser):
     parser.add_argument('--dataset_include_synthetic', action='store_true', help='', default=False)
     parser.add_argument('--dataset_audit_mode', type=str, help='', default='RMFMRNFN')
     parser.add_argument('--dataset_num_syn_canary', type=int, help='', default=2241)
+    parser.add_argument('--dataset_game_seed', type=int, help='', default=30)
+    parser.add_argument('--dataset_include_auxilary', action='store_true', help='', default=False)
+    parser.add_argument('--dataset_num_aux_in', type=int, help='', default=10000)
+    parser.add_argument('--dataset_combine_wt2_test', action='store_true', help='', default=False)
     
     return parser
 
@@ -53,6 +58,7 @@ def add_generator_args(parser):
     parser.add_argument('--generator_generation_saving_dir', type=str, help='', default='/home/aaa208/scratch/PANORAMIA/outputs/WikiText-2/generator/saved_synthetic_data')
     parser.add_argument('--generator_generation_syn_file_name', type=str, help='', default='syn_data.csv')
     parser.add_argument('--generator_generation_save_loss_on_target', action='store_true', help='', default=False)
+    parser.add_argument('--generator_generation_seed', type=int, help='', default=42)
     parser.add_argument('--generator_generation_parameters_batch_size', type=int, help='', default=128)
     parser.add_argument('--generator_generation_parameters_prompt_sequence_length', type=int, help='', default=64)
     parser.add_argument('--generator_generation_parameters_max_length', type=int, help='', default=128)
@@ -71,6 +77,7 @@ def add_audit_args(parser):
     parser.add_argument('--audit_target_run_name', type=str, help='', default='target_epoch_60_block_size_64_syn_in_2241')
     parser.add_argument('--audit_target_train_with_DP', action='store_true', help='', default=False)
     parser.add_argument('--audit_target_embedding_type', type=str, help='', default='loss_seq')
+    parser.add_argument('--audit_target_do_save_weight_initialization', action='store_true', help='', default=False)
     parser.add_argument('--audit_target_optimization_learning_rate', type=float, help='', default=2e-05)
     parser.add_argument('--audit_target_optimization_weight_decay', type=float, help='', default=0.01)
     parser.add_argument('--audit_target_optimization_warmup_steps', type=int, help='', default=100)
@@ -86,6 +93,7 @@ def add_audit_args(parser):
     parser.add_argument('--audit_helper_seed', type=int, help='', default=42)
     parser.add_argument('--audit_helper_run_name', type=str, help='', default=None)
     parser.add_argument('--audit_helper_embedding_type', type=str, help='', default='loss_seq')
+    parser.add_argument('--audit_helper_do_save_weight_initialization', action='store_true', help='', default=False)
     parser.add_argument('--audit_helper_optimization_learning_rate', type=float, help='', default=2e-05)
     parser.add_argument('--audit_helper_optimization_weight_decay', type=float, help='', default=0.01)
     parser.add_argument('--audit_helper_optimization_warmup_steps', type=int, help='', default=100)
@@ -119,6 +127,8 @@ def add_attack_args(parser):
     parser.add_argument('--attack_mia_training_args_evaluation_strategy', type=str, help='', default='epoch')
     parser.add_argument('--attack_mia_training_args_overwrite_output_dir', action='store_true', help='', default=True)
     parser.add_argument('--attack_mia_training_args_max_fpr', type=float, help='', default=0.1)
+    parser.add_argument('--attack_mia_training_args_evaluate_every_n_steps', type=int, help='', default=50)
+    parser.add_argument('--attack_mia_training_args_metric_for_best_model', type=str, help='', default='auc')
 
     # baseline attack arguments
     parser.add_argument('--attack_baseline_net_type', type=str, help='', default='mix')
@@ -141,6 +151,8 @@ def add_attack_args(parser):
     parser.add_argument('--attack_baseline_training_args_evaluation_strategy', type=str, help='', default='epoch')
     parser.add_argument('--attack_baseline_training_args_overwrite_output_dir', action='store_true', help='', default=True)
     parser.add_argument('--attack_baseline_training_args_max_fpr', type=float, help='', default=0.1)
+    parser.add_argument('--attack_baseline_training_args_evaluate_every_n_steps', type=int, help='', default=50)
+    parser.add_argument('--attack_baseline_training_args_metric_for_best_model', type=str, help='', default='auc')
     return parser
 
 def init_args():

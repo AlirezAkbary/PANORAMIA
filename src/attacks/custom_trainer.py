@@ -13,7 +13,7 @@ from transformers import get_linear_schedule_with_warmup
 from easydict import EasyDict
 import sklearn.metrics as metrics
 
-from src.attacks.utils import enable_full_determinism
+from src.attacks.utils import enable_full_determinism, get_max_eps_validation
 
 device = 'cpu'
 if torch.cuda.is_available():
@@ -39,6 +39,7 @@ class TwoPhaseTrainer:
         self.best_eval_auc = 0.
         self.best_eval_score = None
         self.best_eval_true = None
+        self.best_eval_eps = 0.
 
         # handling the reproduciblity manually in this case, since we use a custom trainer
         enable_full_determinism(seed)
@@ -70,7 +71,7 @@ class TwoPhaseTrainer:
 
         # TODO: assert model has logits linear head. Currently, it's hardcoded in the code
         phase_1_optimizer = Adam(
-            [self.model.model.logits_linear_head] + [self.model.model.output_neuron_bias], 
+            [self.model.model.logits_linear_head] + [self.model.model.output_neuron_bias] + [self.model.model.logits_hidden_layer.weight, self.model.model.logits_hidden_layer.bias],  # TODO: this is hardcoded in the code, and it's also dependent on the use_hidden_logits of the model. Update it.
             lr= self.training_args.phase1_learning_rate
         )
 
@@ -104,6 +105,45 @@ class TwoPhaseTrainer:
             self.model.model.gpt_linear_head.data = torch.randn_like(self.model.model.gpt_linear_head)
 
     
+    def one_phase_train(self):
+        """
+        This is temporary function to support training baseline with no helper model, whose training doesn't need first phase
+        """
+        # no decay for bias and normalization layers
+        no_decay = ["bias", "LayerNorm.weight"]
+        optimizer_grouped_parameters = [
+            {
+                "params": [p for n, p in self.model.named_parameters() if
+                            (not any(nd in n for nd in no_decay)) and p.requires_grad],
+                "weight_decay": self.training_args.weight_decay,
+            },
+            {
+                "params": [p for n, p in self.model.named_parameters() if
+                            any(nd in n for nd in no_decay) and p.requires_grad],
+                "weight_decay": 0.0,
+            },
+        ]
+        
+        phase_2_optimizer = AdamW(optimizer_grouped_parameters, 
+            lr = self.training_args.learning_rate
+        )
+        
+        phase_2_scheduler = get_linear_schedule_with_warmup(phase_2_optimizer, 
+                                                        num_warmup_steps = self.training_args.warmup_steps, 
+                                                        num_training_steps = self.training_args.max_steps)
+
+        # re-initialize the gpt head. It had initlized with zero. Now, with standard gaussian
+        self._re_init_gpt_head()
+
+        # second loop training loop
+        self.training_loop(
+            optimizer=phase_2_optimizer,
+            optim_steps=self.training_args.max_steps,
+            use_scheduler=True,
+            scheduler=phase_2_scheduler
+        )
+
+
     def train(self):
         # creating the optimizers and scheduler for the two phase optimizations
         phase_1_optimizer, phase_2_optimizer, phase_2_scheduler = self.create_optimizer_and_scheduler()
@@ -160,16 +200,31 @@ class TwoPhaseTrainer:
         
         if val_acc > self.best_eval_accuracy:
             self.best_eval_accuracy = val_acc
-            self.best_eval_score = all_scores
-            self.best_eval_true = all_labels
-            torch.save(self.model.state_dict(), self.training_args.output_dir+"/model.pth")
+            if self.training_args.metric_for_best_model == 'acc':
+                self.best_eval_score = all_scores
+                self.best_eval_true = all_labels
+                torch.save(self.model.state_dict(), self.training_args.output_dir+"/model.pth")
 
-            logging.info(f"acc increased to: {val_acc}. Saving model...")
+                logging.info(f"acc increased to: {val_acc}. Saving model...")
         
         if auc > self.best_eval_auc: 
             self.best_eval_auc = auc
+            if self.training_args.metric_for_best_model == 'auc':
+                self.best_eval_score = all_scores
+                self.best_eval_true = all_labels
+                torch.save(self.model.state_dict(), self.training_args.output_dir+"/model.pth")
+
+                logging.info(f"auc increased to: {auc}. Saving model...")
             
-            
+        if self.training_args.metric_for_best_model == 'eps':
+            eps = get_max_eps_validation(np.concatenate(all_scores), np.concatenate(all_labels))
+            if eps > self.best_eval_eps:
+                self.best_eval_eps = eps
+                self.best_eval_score = all_scores
+                self.best_eval_true = all_labels
+                torch.save(self.model.state_dict(), self.training_args.output_dir+"/model.pth")
+
+                logging.info(f"eps increased to: {eps} on validation. Saving model...")
         
         avg_val_loss = total_eval_loss / len(self.validation_dataloader)
         validation_time = self._format_time(time.time() - t0)    
@@ -191,7 +246,7 @@ class TwoPhaseTrainer:
     ):
         # moving model to the available device. torch.nn.module.to happens in-place
         self.model.to(device)
-        self.model.side_net.model.to(device)
+        # self.model.side_net.model.to(device)
 
         num_step = 0
         start_t0 = time.time()
@@ -201,11 +256,10 @@ class TwoPhaseTrainer:
             total_train_loss = 0
             all_train_scores = []
             all_train_labels = []
-            t0 = time.time()
-
-            self.model.train()
+            train_t0 = time.time()
             
             for batch in self.train_dataloader:
+                self.model.train()
 
                 b_input_ids = batch["input_ids"].to(device)
                 b_masks = batch["attention_mask"].to(device)
@@ -238,60 +292,61 @@ class TwoPhaseTrainer:
                     scheduler.step()
 
                 num_step += 1
-            
 
-            self._training_epoch_end(
-                total_train_loss,
-                all_train_scores,
-                all_train_labels,
-                t0
-            )
+                if num_step % self.training_args.evaluate_every_n_steps == 0: 
+                    
+                    self.model.eval()
 
-            self.model.eval()
+                    all_val_scores = []
+                    all_val_labels = []
+                    total_eval_loss = 0
+                    num_correct = 0
+                    t0 = time.time()
 
-            all_val_scores = []
-            all_val_labels = []
-            total_eval_loss = 0
-            num_correct = 0
-            t0 = time.time()
+                    for batch in self.validation_dataloader:
+                        
+                        b_input_ids = batch["input_ids"].to(device)
+                        b_masks = batch["attention_mask"].to(device)
+                        b_labels = batch["labels"].to(device)
+                        
+                        with torch.no_grad():        
 
-            for batch in self.validation_dataloader:
+                            model_outputs = self.model(
+                                input_ids=b_input_ids,
+                                attention_mask=b_masks,
+                                labels=b_labels
+                            )
+                        
+                            loss = model_outputs.loss 
+                            val_logits = model_outputs.logits
+                        
+                        
+                        val_pred_prob = torch.sigmoid(val_logits).view(-1)
+                        all_val_scores.append(val_pred_prob.detach().cpu().numpy())
+                        all_val_labels.append(b_labels.detach().cpu().numpy())
+                        
                 
-                b_input_ids = batch["input_ids"].to(device)
-                b_masks = batch["attention_mask"].to(device)
-                b_labels = batch["labels"].to(device)
-                
-                with torch.no_grad():        
-
-                    model_outputs = self.model(
-                        input_ids=b_input_ids,
-                        attention_mask=b_masks,
-                        labels=b_labels
+                        preds = torch.where(val_pred_prob >= 0.5, 1., 0.)
+                        
+                        num_correct += torch.sum(preds.view(-1) == b_labels.view(-1)).item()
+                        
+                        batch_loss = loss.item()
+                        total_eval_loss += batch_loss 
+                    
+                    self._validation_epoch_end(
+                        total_eval_loss,
+                        num_correct,
+                        all_val_scores,
+                        all_val_labels,
+                        t0
                     )
-                
-                    loss = model_outputs.loss 
-                    val_logits = model_outputs.logits
-                
-                
-                val_pred_prob = torch.sigmoid(val_logits).view(-1)
-                all_val_scores.append(val_pred_prob.detach().cpu().numpy())
-                all_val_labels.append(b_labels.detach().cpu().numpy())
-                
-        
-                preds = torch.where(val_pred_prob >= 0.5, 1., 0.)
-                
-                num_correct += torch.sum(preds.view(-1) == b_labels.view(-1)).item()
-                
-                batch_loss = loss.item()
-                total_eval_loss += batch_loss 
             
-            self._validation_epoch_end(
-                total_eval_loss,
-                num_correct,
-                all_val_scores,
-                all_val_labels,
-                t0
-            )
+            self._training_epoch_end(
+                        total_train_loss,
+                        all_train_scores,
+                        all_train_labels,
+                        train_t0
+                    )
         
         with open(self.training_args.output_dir + 'result_best_val.txt', 'w+') as f:
             f.write("Best validation accuracy: " + str(self.best_eval_accuracy) + '\n' + "Best validation AUC:" + str(self.best_eval_auc))
@@ -303,7 +358,7 @@ class TwoPhaseTrainer:
     def test(self, model, test_dataset, output_dir):
         model.eval()
         model.to(device)
-        model.side_net.model.to(device)
+        # model.side_net.model.to(device)
 
         test_dataloader = DataLoader(
             test_dataset, 

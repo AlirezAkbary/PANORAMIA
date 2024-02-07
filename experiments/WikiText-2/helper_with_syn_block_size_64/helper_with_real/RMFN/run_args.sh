@@ -13,7 +13,7 @@ source panoramia_venv/bin/activate
 
 attack_seed_num=$1
 
-python main.py  --base_log_dir "/home/aaa208/scratch/PANORAMIA/experiments/WikiText-2/helper_with_syn_block_size_64/helper_with_real/RMFN/" \
+python -m src.main  --base_log_dir "/home/aaa208/scratch/PANORAMIA/experiments/WikiText-2/helper_with_syn_block_size_64/helper_with_real/RMFN/" \
                 --base_project_name "PANORAMIA-Wiki-Text-2-helper_with_real_baseline_block_size_64" \
                 --dataset_path "wikitext" \
                 --dataset_name "wikitext-2-raw-v1" \

@@ -14,7 +14,7 @@ source panoramia_venv/bin/activate
 attack_seed_num=$1
                 
 
-python main.py  --base_log_dir "/home/aaa208/scratch/PANORAMIA/experiments/WikiText-2/RMFMRNFN/" \
+python -m src.main  --base_log_dir "/home/aaa208/scratch/PANORAMIA/experiments/WikiText-2/RMFMRNFN/" \
                 --base_project_name "PANORAMIA-Wiki-Text-2-RMFMRNFN" \
                 --dataset_path "wikitext" \
                 --dataset_name "wikitext-2-raw-v1" \

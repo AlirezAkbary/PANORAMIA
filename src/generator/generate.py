@@ -4,6 +4,7 @@ import os
 from easydict import EasyDict
 import torch
 import pandas as pd
+from transformers import set_seed
 
 from src.datasets.datamodule import PANORAMIADataModule
 from src.generator.utils import check_length_to_block_size
@@ -34,6 +35,9 @@ def generate_synthetic_samples(
 
     # loading the generation parameters
     config_gen_params = config.generator.generation.parameters
+
+    # setting seed for reproducibility
+    set_seed(config.generator.generation.seed)
 
 
     # getting the prompt dataloader
@@ -76,13 +80,11 @@ def generate_synthetic_samples(
                 top_p=config_gen_params.top_p,
                 temperature=config_gen_params.temperature,
                 num_return_sequences=config_gen_params.num_return_sequences
-            )
-            
-            
+            )            
         
 
         output_text = dm.tokenizer.batch_decode(
-            outputs[:, prompt_sequence_length:config_gen_params.max_length], #extracting the generated part from the input prompt
+            outputs[:, prompt_sequence_length:].contiguous().view(-1, dm.block_size), #extracting the generated part from the input prompt
             skip_special_tokens=False, 
             clean_up_tokenization_spaces=False
         )
@@ -96,13 +98,15 @@ def generate_synthetic_samples(
         # appending the generated samples to the dataframe
         for i in range(len(batch['input_ids']) ): # the last batch might not be equal to batch_size
             for j in range(config_gen_params.num_return_sequences):
-                row = {
-                    "Prompt":  [dm.tokenizer.decode(batch["input_ids"][i, :prompt_sequence_length])],
-                    "text": [output_text[config_gen_params.num_return_sequences * i + j]],
-                    "Length-Generated": [len(outputs[i])] #the length of generated text is not necessarily deterministic and might vary
-                }
+                for k in range((config_gen_params.max_length - prompt_sequence_length)//dm.block_size):
 
-                df = pd.concat([df, pd.DataFrame.from_dict(row)], ignore_index=True)
+                    row = {
+                        "Prompt":  [dm.tokenizer.decode(batch["input_ids"][i, :prompt_sequence_length])],
+                        "text": [output_text[config_gen_params.num_return_sequences * ((config_gen_params.max_length - prompt_sequence_length)//dm.block_size) * i +  (((config_gen_params.max_length - prompt_sequence_length)//dm.block_size) * j) + k]],
+                        "Length-Generated": [len(outputs[i])] #the length of generated text is not necessarily deterministic and might vary
+                    }
+
+                    df = pd.concat([df, pd.DataFrame.from_dict(row)], ignore_index=True)
     
     # decoding and ecoding back are not necessarily inverse of each other. Hence, we check that samples would be of length after encoding.
     df = check_length_to_block_size(

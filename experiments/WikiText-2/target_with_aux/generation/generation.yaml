@@ -1,0 +1,52 @@
+base:
+  log_dir: /home/aaa208/scratch/PANORAMIA/experiments/WikiText-2/target_with_aux/generation/
+  project_name: Target_with_aux-PANORAMIA-Wiki-Text-2
+dataset:
+  path: wikitext
+  name: wikitext-2-raw-v1
+  path_to_synthetic_data: ~
+  synthetic_text_column_name: text
+  seed: 42
+  do_shuffle: True
+  pretrained_model_name_or_path: gpt2
+  block_size: 64
+  generator_train_percent: 44
+  prompt_sampling_percent: 24
+  target_model_percent: 90
+  helper_model_percent: 100
+  helper_model_train_data_mode: 'syn'
+  syn_audit_percent: 20
+  mia_num_train : 500
+  mia_num_val : 500
+  mia_num_test : 1000
+  include_synthetic: False
+  audit_mode:  RMFN
+  num_syn_canary: ~
+  game_seed: 30
+  include_auxilary: True
+  num_aux_in: 10000
+generator:
+  train:
+    pretrained_model_name_or_path: gpt2
+    saving_dir: /home/aaa208/scratch/PANORAMIA/outputs/WikiText-2/generator/target_on_first_90_percent/saved_model/checkpoint-845/
+    run_name: generator-fine-tune-target_on_first_90_percent
+    seed: 42
+    optimization:
+      per_device_batch_size: 64
+      epoch: 40
+      learning_rate: 0.00002
+      weight_decay: 0.01
+      warmup_steps: 100
+
+  generation:
+    saving_dir: /home/aaa208/scratch/PANORAMIA/outputs/WikiText-2/generator/target_with_aux/saved_synthetic_data/
+    syn_file_name: syn_data.csv
+    save_loss_on_target: False
+    parameters:
+      batch_size: 64
+      prompt_sequence_length: 64
+      max_length: 128
+      top_k: 200
+      top_p: 1
+      temperature: 1
+      num_return_sequences: 8

@@ -50,6 +50,7 @@ def train_audit_model(
         save_strategy=audit_config.optimization.save_strategy,
         load_best_model_at_end=audit_config.optimization.load_best_model_at_end,
         save_total_limit=audit_config.optimization.save_total_limit,
+        # save_steps=audit_config.optimization.save_steps,
         do_train=True,
         do_eval=True,
         evaluation_strategy="epoch",

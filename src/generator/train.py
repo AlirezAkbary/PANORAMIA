@@ -47,7 +47,8 @@ def fine_tune_generator(
             project=config.base.project_name,
             group="generator-fine-tune",
             name=config.generator.train.run_name,
-            config=training_args
+            config=training_args,
+            reinit=True
         )
     
     logging.info(f"Fine-tuning the generator with hyperparameters:\n{training_args}")

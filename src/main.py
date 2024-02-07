@@ -6,7 +6,8 @@ import yaml
 from easydict import EasyDict
 from transformers import AutoModelForCausalLM
 
-from arguments import init_args, args_to_nested_dict
+from src.arguments import init_args, args_to_nested_dict
+from src.utils import setup_attack_output_dir
 from src.datasets.datamodule import PANORAMIADataModule
 from src.generator.train import fine_tune_generator
 from src.generator.generate import generate_synthetic_samples
@@ -51,9 +52,9 @@ def main(config: EasyDict):
     # del the generator model from memory
     del generator_model
 
-    # # --------------------
-    # # Part 3. Train/Load Audit Model
-    # # --------------------
+    # --------------------
+    # Part 3. Train/Load Audit Model
+    # --------------------
 
     # train the target model
     if os.path.exists(config.audit.target.saving_dir):
@@ -77,9 +78,9 @@ def main(config: EasyDict):
             train_with_DP=False
         )
 
-    # # --------------------
-    # # Part 4. MIA/Baseline Attack
-    # # --------------------
+    # --------------------
+    # Part 4. MIA/Baseline Attack
+    # --------------------
 
     # instantiate audit model objects
     target_audit_model = AuditModelGPT2CLM(
@@ -96,37 +97,39 @@ def main(config: EasyDict):
     
     # train the baseline and mia
 
-    # updating parameters based on the input seed
-    config.attack.baseline.training_args.output_dir = os.path.join(
-        config.attack.baseline.training_args.output_dir, 
-        f'{config.base.project_name}/', 
-        f'seed_{config.attack.baseline.training_args.seed}/'
-    )
-    config.attack.mia.training_args.output_dir = os.path.join(
-        config.attack.mia.training_args.output_dir, 
-        f'{config.base.project_name}/', 
-        f'seed_{config.attack.mia.training_args.seed}/'
-    )
-
-    if os.path.exists(config.attack.baseline.training_args.output_dir):
-        ...
-    else:
-        baseline_trainer = train_attack(
-            config=config,
-            dm=dm,
-            audit_model=helper_audit_model,
-            train_baseline=True
-        )
+    # updating output dir based on input parameters
+    config = setup_attack_output_dir(config)
     
-    if os.path.exists(config.attack.mia.training_args.output_dir):
-        ...
-    else:
-        mia_trainer = train_attack(
-            config=config,
-            dm=dm,
-            audit_model=target_audit_model,
-            train_baseline=False
-        )
+
+    if config.base.attack_main == 'baseline':
+        if os.path.exists(os.path.join(config.attack.baseline.training_args.output_dir, 'best_test_preds.npy')):
+            ...
+        else:
+            baseline_trainer = train_attack(
+                config=config,
+                dm=dm,
+                audit_model=helper_audit_model,
+                train_baseline=True
+            )
+    elif config.base.attack_main == 'mia':
+        if os.path.exists(os.path.join(config.attack.mia.training_args.output_dir, 'best_test_preds.npy')):
+            ...
+        else:
+            if config.attack.mia.net_type == 'all':
+                mia_trainer = train_attack(
+                    config=config,
+                    dm=dm,
+                    audit_model=[target_audit_model, helper_audit_model],
+                    train_baseline=False
+                )
+            else:
+                mia_trainer = train_attack(
+                    config=config,
+                    dm=dm,
+                    audit_model=target_audit_model,
+                    train_baseline=False
+                )
+                ...
     
     # audit 
 

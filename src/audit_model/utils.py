@@ -1,9 +1,12 @@
 from typing import Callable
 import logging
 import math
+import os
 
+import torch
 from easydict import EasyDict
 from transformers import Trainer, AutoModelForCausalLM
+from transformers.trainer_utils import enable_full_determinism
 import wandb
 
 
@@ -16,6 +19,19 @@ def setup_model(
     """
     return lambda: AutoModelForCausalLM.from_pretrained(config.pretrained_model_name_or_path)
 
+def save_init(
+    model_init: Callable,
+    seed: int,
+    saving_dir
+):
+    enable_full_determinism(seed)
+    initialized_model = model_init()
+    path = os.path.join(saving_dir, "init_model/")
+    os.makedirs(path, exist_ok=True)
+    torch.save(
+        initialized_model.state_dict(),  
+        path + "model.pth"
+    )
 
 def DP_training():
     raise NotImplementedError
@@ -35,13 +51,19 @@ def regular_training(config, training_args, train_dataset, validation_dataset, t
             project=config.base.project_name,
             group=audit_type,
             name=audit_config.run_name,
-            config=training_args
+            config=training_args,
+            reinit=True
         )
 
     logging.info(f"Fine-tuning the {audit_type} without DP with hyperparameters:\n{training_args}")
 
+    model_init = setup_model(audit_config)
+
+    if audit_config.do_save_weight_initialization:
+        save_init(model_init, audit_config.seed, audit_config.saving_dir)
+
     trainer = Trainer(
-        model_init=setup_model(audit_config),
+        model_init=model_init,
         args=training_args,
         train_dataset=train_dataset,
         eval_dataset=validation_dataset,

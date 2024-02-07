@@ -13,6 +13,9 @@ from src.datasets.datamodule import PANORAMIADataModule
 from src.audit_model.audit import AuditModel
 from src.attacks.model import TextAttackModel
 from src.attacks.custom_trainer import TwoPhaseTrainer
+from src.attacks.utils import set_wand_group
+
+os.environ["WANDB__SERVICE_WAIT"]="300"
 
 def train_attack(
     config: EasyDict, 
@@ -30,7 +33,7 @@ def train_attack(
     seed = attack_config.training_args.seed
 
     # updating parameters based on the input seed
-    attack_config.run_name = attack_config.run_name + f"_seed_{seed}"
+    attack_config.run_name = attack_config.run_name + f"_train_num_{config.dataset.mia_num_train}" + f"_seed_{seed}"
     
     logging.info(f"Training with seed: {seed}." + 'baseline mode.' if train_baseline else 'mia mode.' )
 
@@ -47,35 +50,35 @@ def train_attack(
     # initializing wandb for visualization 
     wandb_logger = wandb.init(
             project=config.base.project_name,
-            group='baseline' if train_baseline else 'mia',
+            group=set_wand_group(config, train_baseline),
             name=attack_config.run_name,
             config=attack_config.training_args,
             reinit=True
         )
 
+    # setting the training arguments
+    training_args = attack_config.training_args
+
+    # instantiate the trainer for the attack model
+    trainer = TwoPhaseTrainer(
+        model_init=model_init,
+        train_dataset=train_dataset,
+        val_dataset=val_dataset,
+        seed=seed,
+        training_args=training_args,
+        wandb_logger=wandb_logger
+    )
+
     # training is dependent on net_type
-    if attack_config.net_type == 'mix':
-
-        # setting the training arguments
-        training_args = attack_config.training_args
-
-        # instantiate the trainer for the attack model
-        trainer = TwoPhaseTrainer(
-            model_init=model_init,
-            train_dataset=train_dataset,
-            val_dataset=val_dataset,
-            seed=seed,
-            training_args=training_args,
-            wandb_logger=wandb_logger
-        )
-
+    if attack_config.net_type == 'mix' or attack_config.net_type == 'all':
+        trainer.train()
+    elif attack_config.net_type == 'raw':
+        trainer.one_phase_train()
     else:
-        # setting the training arguments
-        training_args = TrainingArguments(**attack_config.training_args)
         raise NotImplementedError
     
     
-    trainer.train()
+    
 
     # test evaluation
     test_model = TextAttackModel(
