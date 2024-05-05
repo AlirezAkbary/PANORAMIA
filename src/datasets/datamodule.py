@@ -118,28 +118,28 @@ class PANORAMIADataModule:
         # Loading datasets dict. datasets_dict (datasets.DatasetDict) contains train, validation and test datasets.Dataset
         datasets_dict = load_dataset(self.path, self.name)
 
-        if self.combine_wt2_test:
-            combined_dataset = concatenate_datasets([datasets_dict['train'], datasets_dict['test']])
+        # if self.combine_wt2_test:
+        #     combined_dataset = concatenate_datasets([datasets_dict['train'], datasets_dict['test']])
 
-            datasets_dict['train'] = combined_dataset
+        #     datasets_dict['train'] = combined_dataset
 
-            del datasets_dict['test']
+        #     del datasets_dict['test']
         
-        if self.include_auxilary:
-            datasets_dict = load_dataset(
-                'wikitext', 
-                'wikitext-103-raw-v1', 
-            )
+        # if self.include_auxilary:
+        #     datasets_dict = load_dataset(
+        #         'wikitext', 
+        #         'wikitext-103-raw-v1', 
+        #     )
 
-            train_dataset = load_dataset(
-                'wikitext', 
-                'wikitext-103-raw-v1', 
-                split='train[:4%]' # this 4% is hardcoded in the code. Should be added as an argument 
-            )
+        #     train_dataset = load_dataset(
+        #         'wikitext', 
+        #         'wikitext-103-raw-v1', 
+        #         split='train[:4%]' # this 4% is hardcoded in the code. Should be added as an argument 
+        #     )
 
-            datasets_dict['train'] = train_dataset
+        #     datasets_dict['train'] = train_dataset
 
-            del datasets_dict['test']
+        #     del datasets_dict['test']
 
 
         logging.info(f"Original datasets description:\n{datasets_dict}")
