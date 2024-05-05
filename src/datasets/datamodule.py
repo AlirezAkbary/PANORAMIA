@@ -54,7 +54,10 @@ class PANORAMIADataModule:
         include_auxilary: bool = False,
         num_aux_in: int = 10000,
         combine_wt2_test: bool = False,
-        attach_id: bool = False
+        attach_id: bool = False,
+        extra_synthetic: bool = False,
+        path_to_extra_synthetic_data: str = '',
+        extra_m: int = None
     ) -> None:
         """
         Parameters
@@ -85,8 +88,14 @@ class PANORAMIADataModule:
         self.game_seed = game_seed
         self.include_auxilary = include_auxilary
         self.num_aux_in = num_aux_in
-        self.combine_wt2_test = combine_wt2_test
+        self.combine_wt2_test = combine_wt2_test #TODO: This probably should be removed, not useful anymore
         self.attach_id = attach_id
+
+        # this is a temporary patch for rebuttal, later should be dispatched
+        self.extra_synthetic = extra_synthetic 
+        self.path_to_extra_synthetic_data = path_to_extra_synthetic_data
+        self.extra_m = extra_m
+        
 
 
         #TODO: assert received split makes sense
@@ -133,8 +142,6 @@ class PANORAMIADataModule:
             del datasets_dict['test']
 
 
-
-
         logging.info(f"Original datasets description:\n{datasets_dict}")
 
         logging.info(f"First 5 examples in the unshuffled original dataset:\n{datasets_dict['train'][:5]}")
@@ -169,8 +176,6 @@ class PANORAMIADataModule:
         logging.info(f"First 5 examples in the shuffled original dataset:\n{self.tokenizer.batch_decode(self.shuffled_chunked_datasets_dict['train']['input_ids'][:5])}")
         
         
-        
-
     def setup_synthetic_dataset(self):
         """
         """
@@ -203,6 +208,35 @@ class PANORAMIADataModule:
 
             # logging to sanity check that the shuffled version is consistent among different modules in PANORAMIA
             logging.info(f"First 5 examples in the shuffled synthetic dataset:\n{self.tokenizer.batch_decode(self.shuffled_synthetic_dataset['input_ids'][:5])}")
+
+            if self.extra_synthetic:
+                logging.info(f"Providing extra synthetic dataset...")
+
+                # Loading synthetic dataset into a pandas dataframe
+                extra_synthetic_df = self._read_split(self.path_to_extra_synthetic_data)
+
+                # renaming the name of columnn containing the generated texts to text
+                extra_synthetic_df.rename(columns={self.synthetic_text_column_name: 'text'}, inplace=True)
+                
+                # selecting the generated text column. Used double brackets to keep it as a DataFrame instead of a Series
+                extra_synthetic_df = extra_synthetic_df[['text']]
+
+                # Creating a datasets.Dataset from synthetic samples
+                extra_synthetic_dataset = Dataset.from_pandas(extra_synthetic_df)
+
+                logging.info(f"Extra synthetic dataset description:\n{extra_synthetic_dataset}")
+
+                logging.info(f"First 5 examples in the unshuffled extra synthetic dataset:\n{extra_synthetic_dataset[:5]}")
+
+                # Tokenizing the synthetic dataset
+                tokenized_extra_synthetic_dataset = extra_synthetic_dataset.map(self.tokenize_lambda_function, batched=True, num_proc=4, remove_columns=["text"])
+
+                # Shuffle the dataset. This ensures inclusion/exclusion into the target model training set is definitely random.
+                if self.do_shuffle:
+                    self.shuffled_extra_synthetic_dataset = tokenized_extra_synthetic_dataset.shuffle(seed=self.seed)
+
+                # logging to sanity check that the shuffled version is consistent among different modules in PANORAMIA
+                logging.info(f"First 5 examples in the shuffled synthetic dataset:\n{self.tokenizer.batch_decode(self.shuffled_extra_synthetic_dataset['input_ids'][:5])}")
 
         else:
             logging.info(f"Synthetic dataset not provided.")
@@ -507,7 +541,7 @@ class PANORAMIADataModule:
                 RM_val = self.get_real_member_audit_dataset().select(
                     range(real_member_audit_dataset_length - (self.mia_num_test) - (self.mia_num_val), real_member_audit_dataset_length - (self.mia_num_test))
                 )
-                RM_test = self.get_real_member_audit_dataset().select(
+                self.RM_test = self.get_real_member_audit_dataset().select(
                     range(real_member_audit_dataset_length - (self.mia_num_test), real_member_audit_dataset_length)
                 )
                 
@@ -528,7 +562,7 @@ class PANORAMIADataModule:
                     range(len(syn_audit) - (self.mia_num_test) - (self.mia_num_val), len(syn_audit) - (self.mia_num_test))
                 )
 
-                FN_test = syn_audit.select(
+                self.FN_test = syn_audit.select(
                     range(len(syn_audit) - (self.mia_num_test), len(syn_audit))
                 )
 
@@ -540,10 +574,24 @@ class PANORAMIADataModule:
                 train = concatenate_datasets([RM_train, FN_train])
                 val = concatenate_datasets([RM_val, FN_val])
 
+                # temporary patch to increase the test set size
+                if self.extra_synthetic:
+                    extra_FN_test = self.shuffled_extra_synthetic_dataset.select(
+                        range(self.extra_m)
+                    )
+                    generator_prompting_offset = self.get_generator_prompting_offset()
+                    extra_members = self.shuffled_chunked_datasets_dict['train'].select(range(generator_prompting_offset))
+                    extra_RM_test = extra_members.select(range(self.extra_m))
+
+                    self.RM_test = concatenate_datasets([self.RM_test, extra_RM_test])
+                    self.FN_test = concatenate_datasets([self.FN_test, extra_FN_test])
+
+                    self.mia_num_test = self.mia_num_test + self.extra_m
+
                 # use PANORAMIA game for the test set
                 test = self.PANORAMIA_auditing_game(
-                    x_in=RM_test,
-                    x_gen=FN_test,
+                    x_in=self.RM_test,
+                    x_gen=self.FN_test,
                     m=self.mia_num_test
                 )
 

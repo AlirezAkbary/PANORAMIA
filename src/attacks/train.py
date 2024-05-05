@@ -69,17 +69,16 @@ def train_attack(
         wandb_logger=wandb_logger
     )
 
-    # training is dependent on net_type
-    if attack_config.net_type == 'mix' or attack_config.net_type == 'all':
-        trainer.train()
-    elif attack_config.net_type == 'raw':
-        trainer.one_phase_train()
-    else:
-        raise NotImplementedError
+    if not os.path.exists(os.path.join(training_args.output_dir, 'model.pth')):
+        # training is dependent on net_type
+        if attack_config.net_type == 'mix' or attack_config.net_type == 'all':
+            trainer.train()
+        elif attack_config.net_type == 'raw':
+            trainer.one_phase_train()
+        else:
+            raise NotImplementedError
     
     
-    
-
     # test evaluation
     test_model = TextAttackModel(
         side_net=audit_model,
@@ -92,7 +91,8 @@ def train_attack(
     trainer.test(
         model = test_model, 
         test_dataset= test_dataset, 
-        output_dir=attack_config.training_args.output_dir
+        output_dir=attack_config.training_args.output_dir,
+        which_test=training_args.which_test
     )
     
     

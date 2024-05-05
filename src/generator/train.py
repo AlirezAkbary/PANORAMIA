@@ -8,10 +8,12 @@ import wandb
 from easydict import EasyDict
 
 from src.datasets.datamodule import PANORAMIADataModule
+from src.generator.utils import regular_training, dp_training
 
 def fine_tune_generator(
     config: EasyDict, 
     dm: PANORAMIADataModule,
+    train_with_dp: bool = False
 ):
     # load training and validation datasets from data module
     train_dataset, validation_dataset, _ = dm.get_generator_training_datasets()
@@ -30,6 +32,8 @@ def fine_tune_generator(
         output_dir=config.generator.train.saving_dir,
         seed=config.generator.train.seed, # Ensuring Reproducibility
         num_train_epochs=opt_hyp_paramrs.epoch,
+        max_steps=opt_hyp_paramrs.max_steps,
+        gradient_accumulation_steps=opt_hyp_paramrs.gradient_accumulation_steps,
         learning_rate=opt_hyp_paramrs.learning_rate,
         weight_decay=opt_hyp_paramrs.weight_decay,
         warmup_steps=opt_hyp_paramrs.warmup_steps,
@@ -42,35 +46,9 @@ def fine_tune_generator(
         do_eval=True
     )
 
-    # initializing wandb for visualization
-    wandb.init(
-            project=config.base.project_name,
-            group="generator-fine-tune",
-            name=config.generator.train.run_name,
-            config=training_args,
-            reinit=True
-        )
+    if train_with_dp:
+        dp_training(config, training_args, train_dataset, validation_dataset)
+    else:
+        regular_training(config, training_args, train_dataset, validation_dataset)
     
-    logging.info(f"Fine-tuning the generator with hyperparameters:\n{training_args}")
-
-    trainer = Trainer(
-        model_init=lambda: AutoModelForCausalLM.from_pretrained(config.generator.train.pretrained_model_name_or_path),
-        args=training_args,
-        train_dataset=train_dataset,
-        eval_dataset=validation_dataset,
-    )
-
-    # fine-tune the generator
-    trainer.train()
-
-    # saving the final model
-    # Commented this later. Saving model is now assigned to trainer.
-    # trainer.save_model()
-    # model.save_pretrained(config.generator.train.saving_dir)
-
     
-    eval_results = trainer.evaluate()
-    logging.info(f"Evaluation results:\n{eval_results}")
-    logging.info(f"Perplexity: {math.exp(eval_results['eval_loss']):.2f}")
-
-    return trainer.model

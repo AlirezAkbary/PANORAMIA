@@ -34,7 +34,7 @@ def main(config: EasyDict):
         logging.info(f"Loading the generator model from {config.generator.train.saving_dir} ...")
         generator_model = AutoModelForCausalLM.from_pretrained(config.generator.train.saving_dir)
     else:
-        generator_model = fine_tune_generator(config, dm)
+        generator_model = fine_tune_generator(config, dm, train_with_dp=config.generator.train.train_with_dp)
 
     
     # --------------------
@@ -102,7 +102,7 @@ def main(config: EasyDict):
     
 
     if config.base.attack_main == 'baseline':
-        if os.path.exists(os.path.join(config.attack.baseline.training_args.output_dir, 'best_test_preds.npy')):
+        if os.path.exists(os.path.join(config.attack.baseline.training_args.output_dir, config.attack.baseline.training_args.which_test +'_preds.npy')):
             ...
         else:
             baseline_trainer = train_attack(
@@ -112,7 +112,7 @@ def main(config: EasyDict):
                 train_baseline=True
             )
     elif config.base.attack_main == 'mia':
-        if os.path.exists(os.path.join(config.attack.mia.training_args.output_dir, 'best_test_preds.npy')):
+        if os.path.exists(os.path.join(config.attack.mia.training_args.output_dir, config.attack.mia.training_args.which_test + '_preds.npy')):
             ...
         else:
             if config.attack.mia.net_type == 'all':

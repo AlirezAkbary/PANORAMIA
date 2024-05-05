@@ -355,7 +355,7 @@ class TwoPhaseTrainer:
         logging.info("Total training took {:} (h:mm:ss)".format(self._format_time(time.time()-start_t0)))
 
             
-    def test(self, model, test_dataset, output_dir):
+    def test(self, model, test_dataset, output_dir, which_test='test'):
         model.eval()
         model.to(device)
         # model.side_net.model.to(device)
@@ -404,10 +404,10 @@ class TwoPhaseTrainer:
         logging.info("  Test acc: {0:.3f}".format(test_acc))
         logging.info("  Test auc: {0:.3f}".format(test_auc))
 
-        best_test_preds_dir = output_dir + 'best_test_preds.npy'
-        test_true_labels_dir = output_dir + 'test_true_labels.npy'
+        best_test_preds_dir = output_dir + which_test + '_preds.npy'
+        test_true_labels_dir = output_dir + which_test + '_true_labels.npy'
 
-        with open(output_dir + 'result_test.txt', 'w+') as f:
+        with open(output_dir + which_test + '_result.txt', 'w+') as f:
             f.write("Test accuracy: " + str(test_acc) + '\n' + "Test AUC:" + str(test_auc))
 
 

@@ -39,6 +39,10 @@ def add_dataset_args(parser):
     parser.add_argument('--dataset_include_auxilary', action='store_true', help='', default=False)
     parser.add_argument('--dataset_num_aux_in', type=int, help='', default=10000)
     parser.add_argument('--dataset_combine_wt2_test', action='store_true', help='', default=False)
+
+    parser.add_argument('--dataset_extra_synthetic', action='store_true', help='', default=False)
+    parser.add_argument('--dataset_path_to_extra_synthetic_data', type=str, help='', default='')
+    parser.add_argument('--dataset_extra_m', type=int, help='', default=10000)
     
     return parser
 
@@ -48,11 +52,17 @@ def add_generator_args(parser):
     parser.add_argument('--generator_train_saving_dir', type=str, help='', default='/home/aaa208/scratch/PANORAMIA/outputs/WikiText-2/generator/saved_model/checkpoint-330')
     parser.add_argument('--generator_train_run_name', type=str, help='', default='generator-fine-tune')
     parser.add_argument('--generator_train_seed', type=int, help='', default=42)
+    parser.add_argument('--generator_train_train_with_dp', action='store_true', help='', default=False)
+    parser.add_argument('--generator_train_optimization_max_steps', type=int, help='', default=-1)
     parser.add_argument('--generator_train_optimization_per_device_batch_size', type=int, help='', default=64)
     parser.add_argument('--generator_train_optimization_epoch', type=int, help='', default=60)
     parser.add_argument('--generator_train_optimization_learning_rate', type=float, help='', default=2e-05)
     parser.add_argument('--generator_train_optimization_weight_decay', type=float, help='', default=0.01)
     parser.add_argument('--generator_train_optimization_warmup_steps', type=int, help='', default=100)
+    parser.add_argument('--generator_train_optimization_gradient_accumulation_steps', type=int, help='', default=64)
+    parser.add_argument('--generator_train_dp_per_example_max_grad_norm', type=float, help='', default=0.1)
+    parser.add_argument('--generator_train_dp_target_epsilon', type=float, help='', default=3)
+    
 
     # generator synthetic text generation arguments
     parser.add_argument('--generator_generation_saving_dir', type=str, help='', default='/home/aaa208/scratch/PANORAMIA/outputs/WikiText-2/generator/saved_synthetic_data')
@@ -112,6 +122,7 @@ def add_attack_args(parser):
     parser.add_argument('--attack_mia_run_name', type=str, help='', default='RMFMRNFN_seed_0')
     parser.add_argument('--attack_mia_training_args_seed', type=int, help='', default=0)
     parser.add_argument('--attack_mia_training_args_output_dir', type=str, help='', default='/scratch/aaa208/PANORAMIA/outputs/WikiText-2/attacks/mia/')
+    parser.add_argument('--attack_mia_training_args_which_test', type=str, help='', default='test')
     parser.add_argument('--attack_mia_training_args_max_steps', type=int, help='', default=500)
     parser.add_argument('--attack_mia_training_args_batch_size', type=int, help='', default=32)
     parser.add_argument('--attack_mia_training_args_warmup_steps', type=int, help='', default=500)
@@ -136,6 +147,7 @@ def add_attack_args(parser):
     parser.add_argument('--attack_baseline_run_name', type=str, help='', default='RMFMRNFN_seed_0')
     parser.add_argument('--attack_baseline_training_args_seed', type=int, help='', default=0)
     parser.add_argument('--attack_baseline_training_args_output_dir', type=str, help='', default='/scratch/aaa208/PANORAMIA/outputs/WikiText-2/attacks/baseline/')
+    parser.add_argument('--attack_baseline_training_args_which_test', type=str, help='', default='test')
     parser.add_argument('--attack_baseline_training_args_max_steps', type=int, help='', default=500)
     parser.add_argument('--attack_baseline_training_args_batch_size', type=int, help='', default=32)
     parser.add_argument('--attack_baseline_training_args_warmup_steps', type=int, help='', default=500)
@@ -176,7 +188,8 @@ def args_to_nested_dict(args):
         "dataset": {},
         "generator": {
             "train": {
-                "optimization": {}
+                "optimization": {},
+                "dp": {}
             },
             "generation": {
                 "parameters": {}
