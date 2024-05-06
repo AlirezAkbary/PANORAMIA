@@ -32,6 +32,10 @@ class PANORAMIADataModule:
     def __init__(self,
         path: str,
         name: Optional[str] = None,
+        data_split_percentage: int = 7,
+        validation_size: float = 0.1,
+        test_size: float = 0.1,
+        num_chunks_keep: int = 50,
         path_to_synthetic_data: str = None,
         synthetic_text_column_name: str = 'text',
         seed:  Optional[int] = None,
@@ -51,8 +55,6 @@ class PANORAMIADataModule:
         audit_mode: str = '',
         num_syn_canary: int = 2000,
         game_seed: int = 30,
-        include_auxilary: bool = False,
-        num_aux_in: int = 10000,
         combine_wt2_test: bool = False,
         attach_id: bool = False,
         extra_synthetic: bool = False,
@@ -67,6 +69,10 @@ class PANORAMIADataModule:
         """
         self.path = path
         self.name = name
+        self.data_split_percentage = data_split_percentage
+        self.validation_size = validation_size
+        self.test_size = test_size
+        self.num_chunks_keep = num_chunks_keep
         self.path_to_synthetic_data = path_to_synthetic_data
         self.synthetic_text_column_name = synthetic_text_column_name
         self.seed = seed,
@@ -86,8 +92,6 @@ class PANORAMIADataModule:
         self.audit_mode = audit_mode
         self.num_syn_canary = num_syn_canary
         self.game_seed = game_seed
-        self.include_auxilary = include_auxilary
-        self.num_aux_in = num_aux_in
         self.combine_wt2_test = combine_wt2_test #TODO: This probably should be removed, not useful anymore
         self.attach_id = attach_id
 
@@ -116,30 +120,22 @@ class PANORAMIADataModule:
         """
         # Handling the real dataset
         # Loading datasets dict. datasets_dict (datasets.DatasetDict) contains train, validation and test datasets.Dataset
-        datasets_dict = load_dataset(self.path, self.name)
+        dataset = load_dataset(self.path, self.name, split=f'train[:{self.data_split_percentage}%]')
 
-        # if self.combine_wt2_test:
-        #     combined_dataset = concatenate_datasets([datasets_dict['train'], datasets_dict['test']])
+        datasets_dict = dataset.train_test_split(
+            test_size=self.validation_size + self.test_size, 
+            seed=self.seed
+        )
 
-        #     datasets_dict['train'] = combined_dataset
-
-        #     del datasets_dict['test']
+        unseen_datasets_dict = datasets_dict['test'].train_test_split(
+            test_size=self.test_size/(self.validation_size+self.test_size),
+            seed=self.seed
+        )
         
-        # if self.include_auxilary:
-        #     datasets_dict = load_dataset(
-        #         'wikitext', 
-        #         'wikitext-103-raw-v1', 
-        #     )
+        del datasets_dict['test']
 
-        #     train_dataset = load_dataset(
-        #         'wikitext', 
-        #         'wikitext-103-raw-v1', 
-        #         split='train[:4%]' # this 4% is hardcoded in the code. Should be added as an argument 
-        #     )
-
-        #     datasets_dict['train'] = train_dataset
-
-        #     del datasets_dict['test']
+        datasets_dict['validation'] = unseen_datasets_dict['train']
+        datasets_dict['test'] = unseen_datasets_dict['test']
 
 
         logging.info(f"Original datasets description:\n{datasets_dict}")
@@ -153,27 +149,29 @@ class PANORAMIADataModule:
         self.tokenizer.model_max_length = sys.maxsize 
 
         # Lambda function for tokenizing the datasets
-        
 
         # datasets.DatasetDict has a map method applying a function to all the elements in the table
         # The transformation is applied to all the datasets of the dataset dictionary.
         self.tokenize_lambda_function = lambda examples: self._tokenize_function(examples, self.tokenizer)
-        tokenized_datasets_dict = datasets_dict.map(self.tokenize_lambda_function, batched=True, batch_size=1000, num_proc=4, remove_columns=["text"])
+        tokenized_datasets_dict = datasets_dict.map(self.tokenize_lambda_function, batched=True, num_proc=4, remove_columns=["page"])
+        
 
         # Preprocessing the dataset. Breaking the dataset into equal chunks
-        group_texts_lambda_function = lambda examples: self._group_texts(examples, self.block_size)
+        group_texts_lambda_function = lambda examples: self._group_texts(examples, self.block_size, self.num_chunks_keep)
         chunked_datasets_dict = tokenized_datasets_dict.map(
             group_texts_lambda_function,
             batched=True,
-            batch_size=1000,
             num_proc=4,
+            load_from_cache_file=False
         )
         logging.info(f"Original chunked datasets description:\n{chunked_datasets_dict}")
 
-        # Shuffle the dataset. This ensures inclusion/exclusion into the target model training set is definitely random.
-        if self.do_shuffle:
-            self.shuffled_chunked_datasets_dict = chunked_datasets_dict.shuffle(seed=self.seed)
-        logging.info(f"First 5 examples in the shuffled original dataset:\n{self.tokenizer.batch_decode(self.shuffled_chunked_datasets_dict['train']['input_ids'][:5])}")
+        self.shuffled_chunked_datasets_dict = chunked_datasets_dict
+        
+        # # Shuffle the dataset. This ensures inclusion/exclusion into the target model training set is definitely random.
+        # if self.do_shuffle:
+        #     self.shuffled_chunked_datasets_dict = chunked_datasets_dict.shuffle(seed=self.seed)
+        # logging.info(f"First 5 examples in the shuffled original dataset:\n{self.tokenizer.batch_decode(self.shuffled_chunked_datasets_dict['train']['input_ids'][:5])}")
         
         
     def setup_synthetic_dataset(self):
@@ -276,16 +274,25 @@ class PANORAMIADataModule:
 
     @staticmethod
     def _tokenize_function(examples, tokenizer):
-            return tokenizer(examples["text"])
+            return tokenizer(examples["page"])
 
     @staticmethod
-    def _group_texts(examples, block_size):
+    def _group_texts(examples, block_size, num_chunks_keep):
         """
         Concatenate the whole dataset and chunk it into chunks of equal size 
         """
-
+        # a = []
+        # print(type(examples['input_ids']))
+        # for i in range(len(examples['input_ids'])):
+        #     a.append(len(examples['input_ids'][i]) )
+        # print(np.mean(a), np.std(a))
+        
+        examples = {k: [sublist[:block_size*num_chunks_keep] for sublist in examples[k] if len(sublist) >= block_size*num_chunks_keep] for k in examples.keys()}
+        # tmp = [sublist[:block_size*num_samples_keep] for sublist in examples['input_ids'] if len(sublist) >= block_size*num_samples_keep]
+        # print(len(tmp))
         # Concatenate all texts.
         concatenated_examples = {k: sum(examples[k], []) for k in examples.keys()}
+        
         
         total_length = len(concatenated_examples[list(examples.keys())[0]])
         # We drop the small remainder, we could add padding if the model supported it instead of this drop, you can
@@ -368,7 +375,7 @@ class PANORAMIADataModule:
     def get_real_non_member_audit_dataset(self):
         helper_train_offset = self.get_helper_model_offset()
         RNM_from_train = self.shuffled_chunked_datasets_dict['train'].select(range(helper_train_offset, len(self.shuffled_chunked_datasets_dict['train'])))
-        if self.combine_wt2_test or self.include_auxilary:
+        if self.combine_wt2_test:
             RNM_audit_dataset = RNM_from_train
         else:
             RNM_from_test = self.shuffled_chunked_datasets_dict['test']
@@ -390,24 +397,15 @@ class PANORAMIADataModule:
     #     return aux_in, aux_out
 
     def get_target_model_datasets(self):
-        # last index of the allocated dataset to the target model
-        train_offset = self.get_target_model_training_offset()
-        val_offset = self._convert_percent_to_index(self.target_model_percent, len(self.shuffled_chunked_datasets_dict['validation']))
-
         # selecting the datasets 
-        train_dataset = self.shuffled_chunked_datasets_dict['train'].select(range(train_offset))
-        val_dataset = self.shuffled_chunked_datasets_dict['validation'].select(range(val_offset))
+        train_dataset = self.shuffled_chunked_datasets_dict['train']
+        val_dataset = self.shuffled_chunked_datasets_dict['validation']
         test_dataset = None
 
         if self.include_synthetic:
             logging.info(f"including {self.num_syn_canary} synthetic samples into the target model...")
             syn_in_dataset, syn_out_dataset = self._split_syn_audit_dataset_in_out()
             train_dataset = concatenate_datasets([train_dataset, syn_in_dataset])
-
-        # if self.include_auxilary:
-        #     logging.info(f"including {self.num_aux_in} auxilary samples into the target model...")
-        #     aux_in_dataset, _ = self._split_aux_audit_dataset_in_out()
-        #     train_dataset = concatenate_datasets([train_dataset, aux_in_dataset])
 
         # set the labels to input_ids (the task is language modeling)
         train_dataset = train_dataset.add_column('labels', train_dataset['input_ids'].copy())
