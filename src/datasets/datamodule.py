@@ -8,7 +8,7 @@ import torch
 from torch.utils.data import DataLoader
 import pandas as pd
 import numpy as np
-from datasets import load_dataset, Dataset, concatenate_datasets
+from datasets import load_dataset, Dataset, concatenate_datasets, DatasetDict
 from transformers import AutoTokenizer
 
 
@@ -51,6 +51,7 @@ class PANORAMIADataModule:
         mia_num_train : int = 500,
         mia_num_val : int = 500,
         mia_num_test : int = 1000,
+        mia_seed : int = 10,
         include_synthetic: bool = False,
         audit_mode: str = '',
         num_syn_canary: int = 2000,
@@ -88,6 +89,7 @@ class PANORAMIADataModule:
         self.mia_num_train = mia_num_train
         self.mia_num_val = mia_num_val
         self.mia_num_test = mia_num_test # m in theory
+        self.mia_seed = mia_seed
         self.include_synthetic = include_synthetic
         self.audit_mode = audit_mode
         self.num_syn_canary = num_syn_canary
@@ -120,23 +122,9 @@ class PANORAMIADataModule:
         """
         # Handling the real dataset
         # Loading datasets dict. datasets_dict (datasets.DatasetDict) contains train, validation and test datasets.Dataset
-        dataset = load_dataset(self.path, self.name, split=f'train[:{self.data_split_percentage}%]')
-
-        datasets_dict = dataset.train_test_split(
-            test_size=self.validation_size + self.test_size, 
-            seed=self.seed
-        )
-
-        unseen_datasets_dict = datasets_dict['test'].train_test_split(
-            test_size=self.test_size/(self.validation_size+self.test_size),
-            seed=self.seed
-        )
-        
-        del datasets_dict['test']
-
-        datasets_dict['validation'] = unseen_datasets_dict['train']
-        datasets_dict['test'] = unseen_datasets_dict['test']
-
+        datasets_dict = DatasetDict({
+            "train": load_dataset(self.path, self.name, split=f'train[:{self.data_split_percentage}%]')
+       })
 
         logging.info(f"Original datasets description:\n{datasets_dict}")
 
@@ -161,17 +149,36 @@ class PANORAMIADataModule:
         chunked_datasets_dict = tokenized_datasets_dict.map(
             group_texts_lambda_function,
             batched=True,
-            num_proc=4,
-            load_from_cache_file=False
+            num_proc=4
         )
         logging.info(f"Original chunked datasets description:\n{chunked_datasets_dict}")
 
         self.shuffled_chunked_datasets_dict = chunked_datasets_dict
         
-        # # Shuffle the dataset. This ensures inclusion/exclusion into the target model training set is definitely random.
-        # if self.do_shuffle:
-        #     self.shuffled_chunked_datasets_dict = chunked_datasets_dict.shuffle(seed=self.seed)
-        # logging.info(f"First 5 examples in the shuffled original dataset:\n{self.tokenizer.batch_decode(self.shuffled_chunked_datasets_dict['train']['input_ids'][:5])}")
+        # Shuffle the dataset. 
+        if self.do_shuffle:
+            self.shuffled_chunked_datasets_dict = chunked_datasets_dict.shuffle(seed=self.seed)
+        
+
+        datasets_dict = self.shuffled_chunked_datasets_dict['train'].train_test_split(
+            test_size=self.validation_size + self.test_size, 
+            seed=self.seed
+        )
+
+        unseen_datasets_dict = datasets_dict['test'].train_test_split(
+            test_size=self.test_size/(self.validation_size+self.test_size),
+            seed=self.seed
+        )
+        
+        del datasets_dict['test']
+
+        datasets_dict['validation'] = unseen_datasets_dict['train']
+        datasets_dict['test'] = unseen_datasets_dict['test']
+
+        self.shuffled_chunked_datasets_dict = datasets_dict
+
+        logging.info(f"First 5 examples in the shuffled original dataset:\n{self.tokenizer.batch_decode(self.shuffled_chunked_datasets_dict['train']['input_ids'][:5])}")
+
         
         
     def setup_synthetic_dataset(self):
@@ -182,10 +189,10 @@ class PANORAMIADataModule:
             synthetic_df = self._read_split(self.path_to_synthetic_data)
 
             # renaming the name of columnn containing the generated texts to text
-            synthetic_df.rename(columns={self.synthetic_text_column_name: 'text'}, inplace=True)
+            synthetic_df.rename(columns={self.synthetic_text_column_name: 'page'}, inplace=True)
             
             # selecting the generated text column. Used double brackets to keep it as a DataFrame instead of a Series
-            synthetic_df = synthetic_df[['text']]
+            synthetic_df = synthetic_df[['page']]
 
             # Creating a datasets.Dataset from synthetic samples
             synthetic_dataset = Dataset.from_pandas(synthetic_df)
@@ -195,7 +202,7 @@ class PANORAMIADataModule:
             logging.info(f"First 5 examples in the unshuffled synthetic dataset:\n{synthetic_dataset[:5]}")
 
             # Tokenizing the synthetic dataset
-            tokenized_synthetic_dataset = synthetic_dataset.map(self.tokenize_lambda_function, batched=True, num_proc=4, remove_columns=["text"])
+            tokenized_synthetic_dataset = synthetic_dataset.map(self.tokenize_lambda_function, batched=True, num_proc=4, remove_columns=["page"])
 
             # Each sample in my synthetic dataset is controlled to have length of (block_size) tokens.
             # TODO: Control for my general cases if this is not the case
@@ -239,39 +246,6 @@ class PANORAMIADataModule:
         else:
             logging.info(f"Synthetic dataset not provided.")
 
-    # def setup_auxilary_dataset(self):
-    #     """
-    #     In some experiments on WT-2 dataset, we need more real samples from the WT dataset.
-    #     We source it from WT-103 dataset (from its train split).
-    #     """
-    #     # hard-coded on the split we take from WT-103. The last 20% doesn't have overlap with WT-2
-    #     wt_103_train_dataset = load_dataset('wikitext', 'wikitext-103-raw-v1', split='train[-2%:]')
-
-    #     logging.info(f"Chosen WT-103 split  description:\n{wt_103_train_dataset}")
-
-    #     # Tokenizing the dataset
-    #     tokenized_aux_dataset = wt_103_train_dataset.map(self.tokenize_lambda_function, batched=True, num_proc=4, remove_columns=["text"])
-
-    #     # Preprocessing the dataset. Breaking the dataset into equal chunks
-    #     group_texts_lambda_function = lambda examples: self._group_texts(examples, self.block_size)
-    #     chunked_aux_dataset = tokenized_aux_dataset.map(
-    #         group_texts_lambda_function,
-    #         batched=True,
-    #         batch_size=1000,
-    #         num_proc=4,
-    #     )
-
-    #     logging.info(f"Chunked auxilary dataset description:\n{chunked_aux_dataset}")
-
-    #     # Shuffle the dataset. This ensures inclusion/exclusion into the target model training set is definitely random.
-    #     if self.do_shuffle:
-    #         self.shuffled_aux_dataset = chunked_aux_dataset.shuffle(seed=self.seed)
-
-    #     # logging to sanity check that the shuffled version is consistent among different modules in PANORAMIA
-    #     logging.info(f"First 5 examples in the shuffled auxilary dataset:\n{self.tokenizer.batch_decode(self.shuffled_aux_dataset['input_ids'][:5])}")
-
-
-
     @staticmethod
     def _tokenize_function(examples, tokenizer):
             return tokenizer(examples["page"])
@@ -281,15 +255,9 @@ class PANORAMIADataModule:
         """
         Concatenate the whole dataset and chunk it into chunks of equal size 
         """
-        # a = []
-        # print(type(examples['input_ids']))
-        # for i in range(len(examples['input_ids'])):
-        #     a.append(len(examples['input_ids'][i]) )
-        # print(np.mean(a), np.std(a))
-        
+        # "stratified" sampling. keep num_chunks_keep chunks of size block_size. If a document doesn't have that, omit. 
         examples = {k: [sublist[:block_size*num_chunks_keep] for sublist in examples[k] if len(sublist) >= block_size*num_chunks_keep] for k in examples.keys()}
-        # tmp = [sublist[:block_size*num_samples_keep] for sublist in examples['input_ids'] if len(sublist) >= block_size*num_samples_keep]
-        # print(len(tmp))
+        
         # Concatenate all texts.
         concatenated_examples = {k: sum(examples[k], []) for k in examples.keys()}
         
@@ -325,7 +293,7 @@ class PANORAMIADataModule:
 
     def get_helper_model_offset(self):
         if self.helper_model_train_data_mode == 'real':
-            return self._convert_percent_to_index(self.target_model_percent + self.helper_model_percent, len(self.shuffled_chunked_datasets_dict['train']))
+            return self._convert_percent_to_index(self.helper_model_percent, len(self.shuffled_chunked_datasets_dict['test']))
         elif self.helper_model_train_data_mode == 'syn':
             return self._convert_percent_to_index(self.target_model_percent, len(self.shuffled_chunked_datasets_dict['train']))
         else:
@@ -354,18 +322,17 @@ class PANORAMIADataModule:
     def _split_syn_helper_train_val(self):
         _, syn_helper = self._split_syn_audit_helper()
 
-        # TODO: hardcoding the number of validation samples. Modify it later
-        num_validation = 1800
+        validation_split_percentage = 10
 
-        syn_train_offset = self._convert_percent_to_index(self.helper_model_percent, len(syn_helper)-1800)
+        syn_num_validation = self._convert_percent_to_index(validation_split_percentage, len(syn_helper))
 
-        syn_helper_train = syn_helper.select(range(syn_train_offset))
-        syn_helper_val = syn_helper.select(range(len(syn_helper) - num_validation, len(syn_helper)))
+        syn_helper_train = syn_helper.select(range(len(syn_helper) - syn_num_validation))
+        syn_helper_val = syn_helper.select(range(len(syn_helper) - syn_num_validation, len(syn_helper)))
         syn_helper_test = None
         return syn_helper_train, syn_helper_val, syn_helper_test
 
     def get_real_member_audit_dataset(self):
-        train_offset = self.get_target_model_training_offset()
+        train_offset = len(self.shuffled_chunked_datasets_dict['train'])
         generator_prompting_offset = self.get_generator_prompting_offset()
         return self.shuffled_chunked_datasets_dict['train'].select(range(generator_prompting_offset, train_offset))
 
@@ -373,13 +340,7 @@ class PANORAMIADataModule:
         return len(self.get_real_member_audit_dataset())
 
     def get_real_non_member_audit_dataset(self):
-        helper_train_offset = self.get_helper_model_offset()
-        RNM_from_train = self.shuffled_chunked_datasets_dict['train'].select(range(helper_train_offset, len(self.shuffled_chunked_datasets_dict['train'])))
-        if self.combine_wt2_test:
-            RNM_audit_dataset = RNM_from_train
-        else:
-            RNM_from_test = self.shuffled_chunked_datasets_dict['test']
-            RNM_audit_dataset = concatenate_datasets([RNM_from_train, RNM_from_test])
+        RNM_audit_dataset = self.shuffled_chunked_datasets_dict['test']
         logging.info(f"Real Non-member Audit dataset description:\n{RNM_audit_dataset}")
         return RNM_audit_dataset
 
@@ -423,17 +384,12 @@ class PANORAMIADataModule:
         # TODO: assert helper model train data mode is consistent with helper model percent
         if self.helper_model_train_data_mode == 'real':
 
-            # last index of the allocated dataset to the target model
-            target_train_offset = self.get_target_model_training_offset()
-            target_val_offset = self._convert_percent_to_index(self.target_model_percent, len(self.shuffled_chunked_datasets_dict['validation']))
-
             # last index of the allocated dataset to the helper model
             helper_train_offset = self.get_helper_model_offset()
-            helper_val_offset = self._convert_percent_to_index(self.target_model_percent + self.helper_model_percent, len(self.shuffled_chunked_datasets_dict['validation']))
 
             # selecting the datasets 
-            train_dataset = self.shuffled_chunked_datasets_dict['train'].select(range(target_train_offset, helper_train_offset))
-            val_dataset = self.shuffled_chunked_datasets_dict['validation'].select(range(target_val_offset, helper_val_offset))
+            train_dataset = self.shuffled_chunked_datasets_dict['test'].select(range(helper_train_offset))
+            val_dataset = self.shuffled_chunked_datasets_dict['test'].select(range(helper_train_offset, len(self.shuffled_chunked_datasets_dict['test'])))
             test_dataset = None
             
             
@@ -442,7 +398,6 @@ class PANORAMIADataModule:
             logging.info(f"Helper model with real validation dataset:\n{val_dataset}")
 
             
-        
         elif self.helper_model_train_data_mode == 'syn':
             train_dataset, val_dataset, test_dataset = self._split_syn_helper_train_val()
 
@@ -518,29 +473,19 @@ class PANORAMIADataModule:
                 real_member_audit_dataset_length = self.get_length_real_member_audit_dataset()
 
                 # ensure there are enough real members for audit
-                # if self.include_auxilary:
-                #     assert self.mia_num_train + self.mia_num_val + self.mia_num_test <= real_member_audit_dataset_length + self.num_aux_in, f"There are not enough audit real member samples for spliting into train/val/test. Total number of audit real members: {real_member_audit_dataset_length}. Total number of auxilary data: {self.num_aux_in}"
-                # else:
                 assert self.mia_num_train + self.mia_num_val + self.mia_num_test <= real_member_audit_dataset_length, f"There are not enough audit real member samples for spliting into train/val/test. Total number of audit real members: {real_member_audit_dataset_length}"
                 
-                RM_train = self.get_real_member_audit_dataset().select(
-                    range(self.mia_num_train) 
+                RM_audit = self.get_real_member_audit_dataset().shuffle(seed=self.mia_seed)
+
+                RM_train = RM_audit.select(
+                    range(self.mia_num_train)
                 )
-                # if self.include_auxilary: 
-                #     RM_val = self.get_real_member_audit_dataset().select(
-                #         range(real_member_audit_dataset_length  - (self.mia_num_val), real_member_audit_dataset_length)
-                #     )
-                    
-                #     aux_in_dataset, _ = self._split_aux_audit_dataset_in_out()
-                #     RM_test = aux_in_dataset.select(
-                #         range(self.mia_num_test)
-                #     )
-                # else:
-                RM_val = self.get_real_member_audit_dataset().select(
-                    range(real_member_audit_dataset_length - (self.mia_num_test) - (self.mia_num_val), real_member_audit_dataset_length - (self.mia_num_test))
+                
+                RM_val = RM_audit.select(
+                    range(self.mia_num_train, self.mia_num_train + self.mia_num_val)
                 )
-                self.RM_test = self.get_real_member_audit_dataset().select(
-                    range(real_member_audit_dataset_length - (self.mia_num_test), real_member_audit_dataset_length)
+                self.RM_test = RM_audit.select(
+                    range(self.mia_num_train + self.mia_num_val, self.mia_num_train + self.mia_num_val + self.mia_num_test)
                 )
                 
                 # setting the labels
@@ -551,17 +496,19 @@ class PANORAMIADataModule:
 
                 # ensure there are enough synthetic non-members for audit
                 assert self.mia_num_train + self.mia_num_val + self.mia_num_test <= len(syn_audit), f"There are not enough audit synthetic non-member samples for spliting into train/val/test. Total number of audit synthetic non-members: {len(syn_audit)}"
+                
+                syn_audit = syn_audit.shuffle(seed=self.mia_seed)
 
                 FN_train = syn_audit.select(
                     range(self.mia_num_train) 
                 )
 
                 FN_val = syn_audit.select(
-                    range(len(syn_audit) - (self.mia_num_test) - (self.mia_num_val), len(syn_audit) - (self.mia_num_test))
+                    range(self.mia_num_train, self.mia_num_train + self.mia_num_val)
                 )
 
                 self.FN_test = syn_audit.select(
-                    range(len(syn_audit) - (self.mia_num_test), len(syn_audit))
+                    range(self.mia_num_train + self.mia_num_val, self.mia_num_train + self.mia_num_val + self.mia_num_test)
                 )
 
                 # setting the labels
@@ -602,6 +549,175 @@ class PANORAMIADataModule:
 
                 return train.with_format("torch"), val.with_format("torch"), test.with_format("torch")
                     
+        elif self.audit_mode == 'RMFN_fixed_test':
+            if self.include_synthetic == True:
+                raise NotImplementedError
+            else:
+                # choosing members (+1 label) for train, val, test 
+                real_member_audit_dataset_length = self.get_length_real_member_audit_dataset()
+
+                # ensure there are enough real members for audit
+                assert self.mia_num_train + self.mia_num_val + self.mia_num_test <= real_member_audit_dataset_length, f"There are not enough audit real member samples for spliting into train/val/test. Total number of audit real members: {real_member_audit_dataset_length}"
+                
+                RM_audit = self.get_real_member_audit_dataset().shuffle(seed=self.mia_seed)
+                
+
+                RM_train = RM_audit.select(
+                    range(self.mia_num_train)
+                )
+
+                RM_val = RM_audit.select(
+                    range(len(RM_audit)  - self.mia_num_test - self.mia_num_val, len(RM_audit) - self.mia_num_test)
+                )
+                
+
+                self.RM_test = RM_audit.select(
+                    range(len(RM_audit)  - self.mia_num_test, len(RM_audit))
+                )
+                
+                # setting the labels
+                RM_train = RM_train.add_column("labels", [1.]*len(RM_train))
+                RM_val = RM_val.add_column("labels", [1.]*len(RM_val))
+
+                syn_audit, _ = self._split_syn_audit_helper()
+
+                # ensure there are enough synthetic non-members for audit
+                assert self.mia_num_train + self.mia_num_val + self.mia_num_test <= len(syn_audit), f"There are not enough audit synthetic non-member samples for spliting into train/val/test. Total number of audit synthetic non-members: {len(syn_audit)}"
+
+                syn_audit = syn_audit.shuffle(seed=self.mia_seed)
+                FN_train = syn_audit.select(
+                    range(self.mia_num_train) 
+                )
+                FN_val = syn_audit.select(
+                    range(len(syn_audit) - self.mia_num_test - self.mia_num_val, len(syn_audit) - self.mia_num_test)
+                )
+                
+
+                self.FN_test = syn_audit.select(
+                    range(len(syn_audit) - self.mia_num_test, len(syn_audit))
+                )
+
+                # setting the labels
+                FN_train = FN_train.add_column("labels", [0.]*len(FN_train))
+                FN_val = FN_val.add_column("labels", [0.]*len(FN_val))
+
+                # merging
+                train = concatenate_datasets([RM_train, FN_train])
+                val = concatenate_datasets([RM_val, FN_val])
+
+                # temporary patch to increase the test set size
+                if self.extra_synthetic:
+                    extra_FN_test = self.shuffled_extra_synthetic_dataset.select(
+                        range(self.extra_m)
+                    )
+                    generator_prompting_offset = self.get_generator_prompting_offset()
+                    extra_members = self.shuffled_chunked_datasets_dict['train'].select(range(generator_prompting_offset))
+                    extra_RM_test = extra_members.select(range(self.extra_m))
+
+                    self.RM_test = concatenate_datasets([self.RM_test, extra_RM_test])
+                    self.FN_test = concatenate_datasets([self.FN_test, extra_FN_test])
+
+                    self.mia_num_test = self.mia_num_test + self.extra_m
+
+                # use PANORAMIA game for the test set
+                test = self.PANORAMIA_auditing_game(
+                    x_in=self.RM_test,
+                    x_gen=self.FN_test,
+                    m=self.mia_num_test
+                )
+
+                logging.info(f"Providing the audit datasets in RMFN mode with the following details:")
+                logging.info(f"Train dataset:\n{train}")
+                logging.info(f"Validation dataset:\n{val}")
+                logging.info(f"Test dataset:\n{test}")
+
+                logging.info(f"First 5 examples in the Test (audit) dataset:\n{test[:5]}")
+
+                return train.with_format("torch"), val.with_format("torch"), test.with_format("torch")
+        
+        elif self.audit_mode == 'RMFN_train_test_complement':
+            if self.include_synthetic == True:
+                raise NotImplementedError
+            else:
+                # choosing members (+1 label) for train, val, test 
+                real_member_audit_dataset_length = self.get_length_real_member_audit_dataset()
+                
+                RM_audit = self.get_real_member_audit_dataset().shuffle(seed=self.mia_seed)
+
+                RM_train = RM_audit.select(
+                    range(self.mia_num_train)
+                )
+                
+                RM_val = RM_audit.select(
+                    range(self.mia_num_train, self.mia_num_train + self.mia_num_val)
+                )
+                
+                # setting the labels
+                RM_train = RM_train.add_column("labels", [1.]*len(RM_train))
+                RM_val = RM_val.add_column("labels", [1.]*len(RM_val))
+
+                syn_audit, _ = self._split_syn_audit_helper()
+                
+                syn_audit = syn_audit.shuffle(seed=self.mia_seed)
+
+                FN_train = syn_audit.select(
+                    range(self.mia_num_train) 
+                )
+
+                FN_val = syn_audit.select(
+                    range(self.mia_num_train, self.mia_num_train + self.mia_num_val)
+                )
+
+                # setting the labels
+                FN_train = FN_train.add_column("labels", [0.]*len(FN_train))
+                FN_val = FN_val.add_column("labels", [0.]*len(FN_val))
+
+                remaining_num_test = min(
+                    len(RM_audit) - self.mia_num_train - self.mia_num_val,
+                    len(syn_audit) - self.mia_num_train - self.mia_num_val
+                )
+                self.RM_test = RM_audit.select(
+                    range(self.mia_num_train + self.mia_num_val, self.mia_num_train + self.mia_num_val + remaining_num_test)
+                )
+
+                self.FN_test = syn_audit.select(
+                    range(self.mia_num_train + self.mia_num_val, self.mia_num_train + self.mia_num_val + remaining_num_test)
+                )
+
+                # merging
+                train = concatenate_datasets([RM_train, FN_train])
+                val = concatenate_datasets([RM_val, FN_val])
+
+                # temporary patch to increase the test set size
+                if self.extra_synthetic:
+                    extra_FN_test = self.shuffled_extra_synthetic_dataset.select(
+                        range(self.extra_m)
+                    )
+                    generator_prompting_offset = self.get_generator_prompting_offset()
+                    extra_members = self.shuffled_chunked_datasets_dict['train'].select(range(generator_prompting_offset))
+                    extra_RM_test = extra_members.select(range(self.extra_m))
+
+                    self.RM_test = concatenate_datasets([self.RM_test, extra_RM_test])
+                    self.FN_test = concatenate_datasets([self.FN_test, extra_FN_test])
+
+                    self.mia_num_test = self.mia_num_test + self.extra_m
+
+                # use PANORAMIA game for the test set
+                test = self.PANORAMIA_auditing_game(
+                    x_in=self.RM_test,
+                    x_gen=self.FN_test,
+                    m=remaining_num_test
+                )
+
+                logging.info(f"Providing the audit datasets in RMFN mode with the following details:")
+                logging.info(f"Train dataset:\n{train}")
+                logging.info(f"Validation dataset:\n{val}")
+                logging.info(f"Test dataset:\n{test}")
+
+                logging.info(f"First 5 examples in the Test (audit) dataset:\n{test[:5]}")
+
+                return train.with_format("torch"), val.with_format("torch"), test.with_format("torch")
+
         elif self.audit_mode == 'RMRN':
             if self.include_synthetic == True:
                 raise NotImplementedError
@@ -615,67 +731,52 @@ class PANORAMIADataModule:
                 # else:
                 assert self.mia_num_train + self.mia_num_val + self.mia_num_test <= real_member_audit_dataset_length, f"There are not enough audit real member samples for spliting into train/val/test. Total number of audit real members: {real_member_audit_dataset_length}"
                 
-                RM_train = self.get_real_member_audit_dataset().select(
-                    range(self.mia_num_train) 
-                )
-                # if self.include_auxilary: 
-                #     RM_val = self.get_real_member_audit_dataset().select(
-                #         range(real_member_audit_dataset_length  - (self.mia_num_val), real_member_audit_dataset_length)
-                #     )
+                RM_audit = self.get_real_member_audit_dataset().shuffle(seed=self.mia_seed)
+
+                if self.mia_num_train > 0:
+                    RM_train = RM_audit.select(
+                        range(self.mia_num_train) 
+                    )
                     
-                #     aux_in_dataset, _ = self._split_aux_audit_dataset_in_out()
-                #     RM_test = aux_in_dataset.select(
-                #         range(self.mia_num_test)
-                #     )
-                # else:
-                RM_val = self.get_real_member_audit_dataset().select(
-                    range(real_member_audit_dataset_length - (self.mia_num_test) - (self.mia_num_val), real_member_audit_dataset_length - (self.mia_num_test))
-                )
-                RM_test = self.get_real_member_audit_dataset().select(
-                    range(real_member_audit_dataset_length - (self.mia_num_test), real_member_audit_dataset_length)
+                    RM_val = RM_audit.select(
+                        range(len(RM_audit)  - self.mia_num_test - self.mia_num_val, len(RM_audit) - self.mia_num_test)
+                    )
+
+                RM_test = RM_audit.select(
+                    range(len(RM_audit)  - self.mia_num_test, len(RM_audit))
                 )
                 
-                # setting the labels
-                RM_train = RM_train.add_column("labels", [1.]*len(RM_train))
-                RM_val = RM_val.add_column("labels", [1.]*len(RM_val))
+                if self.mia_num_train > 0:
+                    # setting the labels
+                    RM_train = RM_train.add_column("labels", [1.]*len(RM_train))
+                    RM_val = RM_val.add_column("labels", [1.]*len(RM_val))
 
                 # Total real non-member samples available for audit
-                RNM_audit = self.get_real_non_member_audit_dataset()
+                RNM_audit = self.get_real_non_member_audit_dataset().shuffle(seed=self.mia_seed)
 
-                # ensure there are enough real non-members for audit
-                # if self.include_auxilary:
-                #     assert self.mia_num_train + self.mia_num_val + self.mia_num_test <= len(RNM_audit) + (len(self.shuffled_aux_dataset) - self.num_aux_in), f"There are not enough audit real non-member samples for spliting into train/val/test. Total number of audit real non-members: {len(RNM_audit)}. Total number of real auxilary non-member data:{(len(self.shuffled_aux_dataset) - self.num_aux_in)}"
-                # else:
                 assert self.mia_num_train + self.mia_num_val + self.mia_num_test <= len(RNM_audit), f"There are not enough audit real non-member samples for spliting into train/val/test. Total number of audit real non-members: {len(RNM_audit)}"
 
-                RN_train = RNM_audit.select(
-                    range(self.mia_num_train) 
-                )
+                if self.mia_num_train > 0:
+                    RN_train = RNM_audit.select(
+                        range(self.mia_num_train) 
+                    )
 
-                # if self.include_auxilary:
-                #     RN_val = RNM_audit.select(
-                #         range(len(RNM_audit)  - (self.mia_num_val), len(RNM_audit))
-                #     )
-                #     _, aux_out_dataset = self._split_aux_audit_dataset_in_out()
-                #     RN_test = aux_out_dataset.select(
-                #         range(self.mia_num_test)
-                #     )
-                # else:
-                RN_val = RNM_audit.select(
-                    range(len(RNM_audit) - (self.mia_num_test) - (self.mia_num_val), len(RNM_audit) - (self.mia_num_test))
-                )
+                    RN_val = RNM_audit.select(
+                        range(len(RNM_audit)  - self.mia_num_test - self.mia_num_val, len(RNM_audit) - self.mia_num_test)
+                    )
 
                 RN_test = RNM_audit.select(
-                    range(len(RNM_audit) - (self.mia_num_test), len(RNM_audit))
+                    range(len(RNM_audit)  - self.mia_num_test, len(RNM_audit))
                 )
 
-                # setting the labels
-                RN_train = RN_train.add_column("labels", [0.]*len(RN_train))
-                RN_val = RN_val.add_column("labels", [0.]*len(RN_val))
+                if self.mia_num_train > 0:
+                    # setting the labels
+                    RN_train = RN_train.add_column("labels", [0.]*len(RN_train))
+                    RN_val = RN_val.add_column("labels", [0.]*len(RN_val))
 
-                # merging
-                train = concatenate_datasets([RM_train, RN_train])
-                val = concatenate_datasets([RM_val, RN_val])
+                    # merging
+                    train = concatenate_datasets([RM_train, RN_train])
+                    val = concatenate_datasets([RM_val, RN_val])
 
                 # use PANORAMIA game for the test set
                 test = self.PANORAMIA_auditing_game(
@@ -684,14 +785,24 @@ class PANORAMIADataModule:
                     m=self.mia_num_test
                 )
 
-                logging.info(f"Providing the audit datasets in RMRN mode with the following details:")
-                logging.info(f"Train dataset:\n{train}")
-                logging.info(f"Validation dataset:\n{val}")
-                logging.info(f"Test dataset:\n{test}")
+                if self.mia_num_train > 0:
+                    logging.info(f"Providing the audit datasets in RMRN mode with the following details:")
+                    logging.info(f"Train dataset:\n{train}")
+                    logging.info(f"Validation dataset:\n{val}")
+                    logging.info(f"Test dataset:\n{test}")
 
-                logging.info(f"First 5 examples in the Test (audit) dataset:\n{test[:5]}")
+                    logging.info(f"First 5 examples in the Test (audit) dataset:\n{test[:5]}")
 
-                return train.with_format("torch"), val.with_format("torch"), test.with_format("torch")
+                    return train.with_format("torch"), val.with_format("torch"), test.with_format("torch")
+                else:
+                    logging.info(f"Providing the audit datasets in RMRN mode with the following details:")
+                    logging.info(f"Train dataset: Null")
+                    logging.info(f"Validation dataset: Null")
+                    logging.info(f"Test dataset:\n{test}")
+
+                    logging.info(f"First 5 examples in the Test (audit) dataset:\n{test[:5]}")
+
+                    return None, None, test.with_format("torch")
 
 
         elif self.audit_mode == "RMRN_shuffle":

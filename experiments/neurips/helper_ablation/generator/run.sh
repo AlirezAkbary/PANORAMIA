@@ -9,7 +9,7 @@ module load StdEnv/2023 arrow/15.0.1 rust/1.76.0 python scipy-stack
 
 source ../../test-priv/test-priv-env/bin/activate
 
-python -m src.main --use_yml_config --path_yml_config experiments/neurips/generator/generator_generation.yaml
+python -m src.main --use_yml_config --path_yml_config experiments/neurips/helper_ablation/generator/generator_generation.yaml
 
 nvidia-smi
 

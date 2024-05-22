@@ -1,12 +1,12 @@
 base:
-  log_dir: /home/aaa208/scratch/PANORAMIA/experiments/neurips/generator/
-  project_name: PANORAMIA-neurips
+  log_dir: /home/aaa208/scratch/PANORAMIA/experiments/neurips/helper_ablation/generation/
+  project_name: PANORAMIA-neurips-helper_ablation
 dataset:
   path: EleutherAI/wikitext_document_level
   name: wikitext-103-raw-v1
   data_split_percentage: 16
   validation_size: 0.1
-  test_size: 0.1
+  test_size: 0.4
   num_chunks_keep: 50
   path_to_synthetic_data: ~
   synthetic_text_column_name: text
@@ -29,8 +29,8 @@ dataset:
 generator:
   train:
     pretrained_model_name_or_path: gpt2
-    saving_dir: /home/aaa208/scratch/PANORAMIA/outputs/neurips/generator/saved_model/
-    run_name: generator-fine-tune
+    saving_dir: /home/aaa208/scratch/PANORAMIA/outputs/neurips/helper_ablation/generator/saved_model/checkpoint-1387/
+    run_name: helper_ablation-generator-fine-tune
     seed: 42
     train_with_dp: False
     optimization:
@@ -41,4 +41,17 @@ generator:
       learning_rate: 0.00002
       weight_decay: 0.01
       warmup_steps: 100
+  generation:
+    saving_dir: /home/aaa208/scratch/PANORAMIA/outputs/neurips/helper_ablation/generator/saved_synthetic_data/
+    syn_file_name: syn_data.csv
+    save_loss_on_target: False
+    seed: 42
+    parameters:
+      batch_size: 128
+      prompt_sequence_length: 64
+      max_length: 128
+      top_k: 200
+      top_p: 1
+      temperature: 1
+      num_return_sequences: 9
  

@@ -1,14 +1,14 @@
 base:
-  log_dir: /home/aaa208/scratch/PANORAMIA/experiments/neurips/target/
-  project_name: PANORAMIA-neurips
+  log_dir: /home/aaa208/scratch/PANORAMIA/experiments/neurips/helper_ablation/helper_with_syn/
+  project_name: PANORAMIA-neurips-helper_ablation
 dataset:
   path: EleutherAI/wikitext_document_level
   name: wikitext-103-raw-v1
   data_split_percentage: 16
   validation_size: 0.1
-  test_size: 0.1
+  test_size: 0.4
   num_chunks_keep: 50
-  path_to_synthetic_data: ~
+  path_to_synthetic_data: /home/aaa208/scratch/PANORAMIA/outputs/neurips/helper_ablation/generator/saved_synthetic_data/syn_data.csv
   synthetic_text_column_name: text
   seed: 8
   do_shuffle: True
@@ -18,7 +18,7 @@ dataset:
   prompt_sampling_percent: 15
   helper_model_percent: 100
   helper_model_train_data_mode: 'syn'
-  syn_audit_percent: 30
+  syn_audit_percent: 48
   mia_num_train : 6000
   mia_num_val : 1000
   mia_num_test : 10000
@@ -29,7 +29,7 @@ dataset:
 generator:
   train:
     pretrained_model_name_or_path: gpt2
-    saving_dir: /home/aaa208/scratch/PANORAMIA/outputs/WikiText-2/generator/shuffle_wt_2_test/saved_model/checkpoint-768/
+    saving_dir: /home/aaa208/scratch/PANORAMIA/outputs/neurips/helper_ablation/generator/saved_model/checkpoint-1387/
     run_name: generator-fine-tune-paper-target_whole
     seed: 42
     optimization:
@@ -39,7 +39,7 @@ generator:
       weight_decay: 0.01
       warmup_steps: 100
   generation:
-    saving_dir: /home/aaa208/scratch/PANORAMIA/outputs/WikiText-2/generator/shuffle_wt_2_test/saved_synthetic_data/
+    saving_dir: /home/aaa208/scratch/PANORAMIA/outputs/neurips/helper_ablation/generator/saved_synthetic_data/
     syn_file_name: syn_data.csv
     save_loss_on_target: False
     seed: 42
@@ -54,9 +54,9 @@ generator:
 audit:
   target:
     pretrained_model_name_or_path: gpt2
-    saving_dir: /home/aaa208/scratch/PANORAMIA/outputs/neurips/audit_model/saved_model/epoch_100/
+    saving_dir: /home/aaa208/scratch/PANORAMIA/outputs/neurips/audit_model/saved_model/epoch_100/epoch_200/checkpoint-65000/ #only for skipping to helper training
     seed: 42
-    run_name: target_epoch_100_block_size_64
+    run_name: target_epoch_60_block_size_64
     train_with_DP: False
     embedding_type: loss_seq
     do_save_weight_initialization: False
@@ -65,9 +65,23 @@ audit:
       weight_decay: 0.01
       warmup_steps: 100
       batch_size: 64
-      epoch: 200
-      save_strategy: 'steps'
-      save_steps: 2600
+      epoch: 60
+      save_strategy: 'no'
       load_best_model_at_end: False
       save_total_limit: ~
-  
+  helper:
+    pretrained_model_name_or_path: gpt2
+    saving_dir: /home/aaa208/scratch/PANORAMIA/outputs/neurips/helper_ablation/audit_model/helper_with_syn/saved_model/
+    seed: 42
+    run_name: helper_with_syn_helper_percent_100
+    embedding_type: loss_seq
+    do_save_weight_initialization: False
+    optimization:
+      learning_rate: 0.00002
+      weight_decay: 0.01
+      warmup_steps: 100
+      batch_size: 64
+      epoch: 60
+      save_strategy: epoch
+      load_best_model_at_end: True
+      save_total_limit: 1

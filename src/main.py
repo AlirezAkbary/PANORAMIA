@@ -98,7 +98,7 @@ def main(config: EasyDict):
     # train the baseline and mia
 
     # updating output dir based on input parameters
-    config = setup_attack_output_dir(config)
+    # config = setup_attack_output_dir(config)
     
 
     if config.base.attack_main == 'baseline':

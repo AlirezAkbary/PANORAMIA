@@ -32,17 +32,12 @@ def enable_full_determinism(seed: int):
 def set_wand_group(config, train_baseline):
     attack_num_train = config.dataset.mia_num_train
     if train_baseline:
-        return f"baseline_k_{attack_num_train}_game_seed_{config.dataset.game_seed}"
+        return f"baseline_k_{attack_num_train}"
     else:
         return f"mia_k_{attack_num_train}"
 
 
 # TODO: this is temporary. Should be moved to somewhere more reasonable than here
-
-
-dataset_size = 10000
-delta = 0
-audit_CI = 0.05
 
 #m = number of examples, each included independently with probability 0.5
 #r = number of guesses (i.e. excluding abstentions)
@@ -87,7 +82,7 @@ def get_eps_audit(m, r, v, delta, p):
             eps_max = eps
     return eps_min
 
-def get_max_eps_validation(preds: np.array, labels: np.array):
+def get_max_eps_validation(preds: np.array, labels: np.array, dataset_size: int, delta = 0, audit_CI = 0.05):
     eps_lbs = []
     thresholds = np.linspace(0, 1, 1000)
     for th in thresholds:

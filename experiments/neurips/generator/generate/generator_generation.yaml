@@ -1,5 +1,5 @@
 base:
-  log_dir: /home/aaa208/scratch/PANORAMIA/experiments/neurips/target/
+  log_dir: /home/aaa208/scratch/PANORAMIA/experiments/neurips/generation/
   project_name: PANORAMIA-neurips
 dataset:
   path: EleutherAI/wikitext_document_level
@@ -29,45 +29,28 @@ dataset:
 generator:
   train:
     pretrained_model_name_or_path: gpt2
-    saving_dir: /home/aaa208/scratch/PANORAMIA/outputs/WikiText-2/generator/shuffle_wt_2_test/saved_model/checkpoint-768/
-    run_name: generator-fine-tune-paper-target_whole
+    saving_dir: /home/aaa208/scratch/PANORAMIA/outputs/neurips/generator/saved_model/checkpoint-2784/
+    run_name: generator-fine-tune
     seed: 42
+    train_with_dp: False
     optimization:
       per_device_batch_size: 64
       epoch: 40
+      max_steps: -1
+      gradient_accumulation_steps: 1
       learning_rate: 0.00002
       weight_decay: 0.01
       warmup_steps: 100
   generation:
-    saving_dir: /home/aaa208/scratch/PANORAMIA/outputs/WikiText-2/generator/shuffle_wt_2_test/saved_synthetic_data/
+    saving_dir: /home/aaa208/scratch/PANORAMIA/outputs/neurips/generator/saved_synthetic_data/
     syn_file_name: syn_data.csv
     save_loss_on_target: False
     seed: 42
     parameters:
-      batch_size: 64
+      batch_size: 128
       prompt_sequence_length: 64
       max_length: 128
       top_k: 200
       top_p: 1
       temperature: 1
-      num_return_sequences: 5
-audit:
-  target:
-    pretrained_model_name_or_path: gpt2
-    saving_dir: /home/aaa208/scratch/PANORAMIA/outputs/neurips/audit_model/saved_model/epoch_100/
-    seed: 42
-    run_name: target_epoch_100_block_size_64
-    train_with_DP: False
-    embedding_type: loss_seq
-    do_save_weight_initialization: False
-    optimization: 
-      learning_rate: 0.00002
-      weight_decay: 0.01
-      warmup_steps: 100
-      batch_size: 64
-      epoch: 200
-      save_strategy: 'steps'
-      save_steps: 2600
-      load_best_model_at_end: False
-      save_total_limit: ~
-  
+      num_return_sequences: 8

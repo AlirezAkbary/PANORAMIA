@@ -217,13 +217,20 @@ class TwoPhaseTrainer:
                 logging.info(f"auc increased to: {auc}. Saving model...")
             
         if self.training_args.metric_for_best_model == 'eps':
-            eps = get_max_eps_validation(np.concatenate(all_scores), np.concatenate(all_labels))
+            eps = get_max_eps_validation(
+                preds=np.concatenate(all_scores), 
+                labels=np.concatenate(all_labels), 
+                dataset_size=np.concatenate(all_labels).shape[0],
+                delta=0.,
+                audit_CI=0.05
+            )
+            self.wandb_logger.log({'val/val_measurement': eps})
             if eps > self.best_eval_eps:
                 self.best_eval_eps = eps
                 self.best_eval_score = all_scores
                 self.best_eval_true = all_labels
                 torch.save(self.model.state_dict(), self.training_args.output_dir+"/model.pth")
-
+                
                 logging.info(f"eps increased to: {eps} on validation. Saving model...")
         
         avg_val_loss = total_eval_loss / len(self.validation_dataloader)
@@ -349,7 +356,7 @@ class TwoPhaseTrainer:
                     )
         
         with open(self.training_args.output_dir + 'result_best_val.txt', 'w+') as f:
-            f.write("Best validation accuracy: " + str(self.best_eval_accuracy) + '\n' + "Best validation AUC:" + str(self.best_eval_auc))
+            f.write("Best validation accuracy: " + str(self.best_eval_accuracy) + '\n' + "Best validation AUC:" + str(self.best_eval_auc) + '\n' + "Best validation eps:" + str(self.best_eval_eps))
 
         logging.info("Training complete!")
         logging.info("Total training took {:} (h:mm:ss)".format(self._format_time(time.time()-start_t0)))

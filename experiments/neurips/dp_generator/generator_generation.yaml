@@ -1,5 +1,5 @@
 base:
-  log_dir: /home/aaa208/scratch/PANORAMIA/experiments/neurips/generator/
+  log_dir: /home/aaa208/scratch/PANORAMIA/experiments/neurips/dp_generator/
   project_name: PANORAMIA-neurips
 dataset:
   path: EleutherAI/wikitext_document_level
@@ -29,16 +29,18 @@ dataset:
 generator:
   train:
     pretrained_model_name_or_path: gpt2
-    saving_dir: /home/aaa208/scratch/PANORAMIA/outputs/neurips/generator/saved_model/
-    run_name: generator-fine-tune
+    saving_dir: /home/aaa208/scratch/PANORAMIA/outputs/neurips/dp_generator/saved_model/
+    run_name: dp-generator-fine-tune
     seed: 42
-    train_with_dp: False
+    train_with_dp: True
     optimization:
-      per_device_batch_size: 64
-      epoch: 60
+      per_device_batch_size: 16
+      epoch: 40
       max_steps: -1
-      gradient_accumulation_steps: 1
-      learning_rate: 0.00002
-      weight_decay: 0.01
+      gradient_accumulation_steps: 64
+      learning_rate: 0.001
+      weight_decay: 0.00
       warmup_steps: 100
- 
+    dp:
+      per_example_max_grad_norm: 0.1
+      target_epsilon: 3

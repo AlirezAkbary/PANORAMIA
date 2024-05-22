@@ -1,5 +1,6 @@
 import os
 import logging
+from copy import deepcopy
 
 import torch
 from datasets import load_dataset, Dataset
@@ -33,7 +34,7 @@ def train_attack(
     seed = attack_config.training_args.seed
 
     # updating parameters based on the input seed
-    attack_config.run_name = attack_config.run_name + f"_train_num_{config.dataset.mia_num_train}" + f"_seed_{seed}"
+    attack_config.run_name = f"train_num_{config.dataset.mia_num_train}" + f"_mia_seed_{config.dataset.mia_seed}" + f"_training_seed_{seed}"
     
     logging.info(f"Training with seed: {seed}." + 'baseline mode.' if train_baseline else 'mia mode.' )
 
@@ -47,12 +48,16 @@ def train_attack(
         distinguisher_type=attack_config.distinguisher_type
     )
 
+    wandb_config = deepcopy(attack_config.training_args)
+    wandb_config.mia_seed = config.dataset.mia_seed
+    wandb_config.training_num = config.dataset.mia_num_train
+    wandb_config.test_num = config.dataset.mia_num_test
     # initializing wandb for visualization 
     wandb_logger = wandb.init(
             project=config.base.project_name,
             group=set_wand_group(config, train_baseline),
             name=attack_config.run_name,
-            config=attack_config.training_args,
+            config=wandb_config,
             reinit=True
         )
 
