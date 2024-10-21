@@ -1,5 +1,6 @@
 import logging
 import math
+from copy import deepcopy
 
 import torch
 import pandas as pd
@@ -85,12 +86,16 @@ def init_dp_model(config):
 def dp_training(config, training_args, train_dataset, validation_dataset):
     logging.info(f"Fine-tuning the generator with DP with hyperparameters:\n{training_args}")
     
+    wandb_config = deepcopy(training_args)
+    wandb_config.epsilon = config.generator.train.dp.target_epsilon
+    wandb_config.per_example_max_grad_norm = config.generator.train.dp.per_example_max_grad_norm
+
     # initializing wandb for visualization 
     wandb_logger = wandb.init(
             project=config.base.project_name,
             group="generator-fine-tune",
             name=config.generator.train.run_name,
-            config=training_args,
+            config=wandb_config,
             reinit=True
     )
     

@@ -2,13 +2,17 @@ from typing import Callable
 import logging
 import math
 import os
+from copy import deepcopy
 
 import torch
 from easydict import EasyDict
-from transformers import Trainer, AutoModelForCausalLM
+from transformers import Trainer, AutoModelForCausalLM, AutoConfig
 from transformers.trainer_utils import enable_full_determinism
 import wandb
 
+from src.audit_model.dp_trainer import DPCustomTrainer, PrivacyArguments
+
+os.environ["WANDB__SERVICE_WAIT"]="3000"
 
 def setup_model(
     config: EasyDict, 
@@ -33,8 +37,66 @@ def save_init(
         path + "model.pth"
     )
 
-def DP_training():
-    raise NotImplementedError
+
+def init_dp_model(config):
+    model_checkpoint = config.audit.target.pretrained_model_name_or_path
+
+    # load config. note that ghost clipping doesn't support parameter sharing -> tie_word_embeddings = False
+    lm_config = AutoConfig.from_pretrained(model_checkpoint)
+    lm_config.return_dict = True
+    lm_config.tie_word_embeddings = False
+
+    # loading the model
+    model = AutoModelForCausalLM.from_pretrained(model_checkpoint, config=lm_config)
+
+    # Clone the embedding into the lm_head for better initialization.
+    lm_head = model.get_output_embeddings()
+    embedding = model.get_input_embeddings()
+    lm_head.weight.data.copy_(embedding.weight.data)
+    logging.info(f'Cloning initial embedding into lm_head, '
+          f'checking norms... \n'
+          f'\tlm_head: {lm_head.weight.norm()}, embedding: {embedding.weight.norm()}')
+    torch.testing.assert_allclose(lm_head.weight, embedding.weight)
+    del lm_head, embedding
+
+    return lambda: model
+
+def dp_training(config, training_args, train_dataset, validation_dataset):
+    logging.info(f"Fine-tuning the target with DP with hyperparameters:\n{training_args}")
+    
+    wandb_config = deepcopy(training_args)
+    wandb_config.epsilon = config.audit.target.dp.target_epsilon
+    wandb_config.per_example_max_grad_norm = config.audit.target.dp.per_example_max_grad_norm
+
+    # initializing wandb for visualization 
+    wandb_logger = wandb.init(
+            project=config.base.project_name,
+            group="target-dp-fine-tune",
+            name=config.audit.target.run_name,
+            config=wandb_config,
+            reinit=True
+    )
+    
+    privacy_args = PrivacyArguments(
+        per_example_max_grad_norm=config.audit.target.dp.per_example_max_grad_norm, 
+        target_epsilon=config.audit.target.dp.target_epsilon,
+        target_delta=(1/len(train_dataset)),
+        clipping_mode= 'ghost'
+    )
+    
+    trainer = DPCustomTrainer(
+        model_init=init_dp_model(config),
+        train_dataset=train_dataset.with_format("torch"),
+        val_dataset=validation_dataset.with_format("torch"),
+        seed=config.audit.target.seed,
+        training_args=training_args,
+        privacy_args=privacy_args,
+        wandb_logger=wandb_logger
+    )
+
+    # fine-tune the generator
+    trainer.train()
+    
 
 
 def regular_training(config, training_args, train_dataset, validation_dataset, train_helper):

@@ -241,8 +241,7 @@ class DPCustomTrainer:
                     
                     logging.info("")
                     logging.info("  Step training loss: {0:.2f}".format((tr_loss_scalar - logging_loss_scalar)))
-
-                    #self.run.log({"train/train_loss": avg_train_loss})
+                    self.wandb_logger.log({"train/train_loss": tr_loss_scalar - logging_loss_scalar})
 
                     logging_loss_scalar = tr_loss_scalar
 
@@ -290,6 +289,7 @@ class DPCustomTrainer:
 
             logging.info("  Validation Loss: {0:.2f}".format(avg_val_loss))
             logging.info(f" Validation Perplexity: {current_perplexity}")
+            self.wandb_logger.log({'val/val_loss': avg_val_loss})
 
             if current_perplexity < self.best_eval_perplexity:
                 self.best_eval_perplexity = current_perplexity

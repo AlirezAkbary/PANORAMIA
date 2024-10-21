@@ -1,5 +1,5 @@
 base:
-  log_dir: /home/aaa208/scratch/PANORAMIA/experiments/neurips/helper_with_syn/
+  log_dir: /home/aaa208/scratch/PANORAMIA/experiments/neurips/helper_with_dp_syn/dp_gpt_small_generator_tuned_hyp/
   project_name: PANORAMIA-neurips
 dataset:
   path: EleutherAI/wikitext_document_level
@@ -8,7 +8,7 @@ dataset:
   validation_size: 0.1
   test_size: 0.1
   num_chunks_keep: 50
-  path_to_synthetic_data: '/home/aaa208/scratch/PANORAMIA/outputs/neurips/generator/saved_synthetic_data/syn_data.csv'
+  path_to_synthetic_data: '/home/aaa208/scratch/PANORAMIA/outputs/neurips/dp_gpt_small_generator_tuned_hyp/saved_dp_synthetic_data/syn_data.csv'
   synthetic_text_column_name: text
   seed: 8
   do_shuffle: True
@@ -29,7 +29,7 @@ dataset:
 generator:
   train:
     pretrained_model_name_or_path: gpt2
-    saving_dir: /home/aaa208/scratch/PANORAMIA/outputs/neurips/generator/saved_model/checkpoint-2784/
+    saving_dir: /home/aaa208/scratch/PANORAMIA/outputs/neurips/dp_gpt_small_generator_tuned_hyp/saved_model/
     run_name: generator-fine-tune-paper-target_whole
     seed: 42
     optimization:
@@ -39,7 +39,7 @@ generator:
       weight_decay: 0.01
       warmup_steps: 100
   generation:
-    saving_dir: /home/aaa208/scratch/PANORAMIA/outputs/neurips/generator/saved_synthetic_data/syn_data.csv
+    saving_dir: /home/aaa208/scratch/PANORAMIA/outputs/neurips/dp_gpt_small_generator_tuned_hyp/saved_dp_synthetic_data/syn_data.csv
     syn_file_name: syn_data.csv
     save_loss_on_target: False
     seed: 42
@@ -54,8 +54,7 @@ generator:
 audit:
   target:
     pretrained_model_name_or_path: gpt2
-    # temporarily changing the target model address 
-    saving_dir: /home/aaa208/projects/def-t55wang/aaa208/PANORAMIA/PANORAMIA/tmp_utils/outputs/neurips/audit_model/helper_gpt_large/saved_model/epoch_60/checkpoint-3474/
+    saving_dir: /home/aaa208/scratch/PANORAMIA/outputs/neurips/audit_model/saved_model/epoch_100/epoch_200/checkpoint-50000/
     seed: 42
     run_name: target_epoch_60_block_size_64
     train_with_DP: False
@@ -72,9 +71,9 @@ audit:
       save_total_limit: ~
   helper:
     pretrained_model_name_or_path: gpt2
-    saving_dir: /home/aaa208/scratch/PANORAMIA/outputs/neurips/audit_model/helper_with_syn/saved_model/
+    saving_dir: /home/aaa208/scratch/PANORAMIA/outputs/neurips/audit_model/helper_with_dp_syn/dp_gpt_small_generator_tuned_hyp/saved_model/
     seed: 42
-    run_name: helper_with_syn_helper_percent_100
+    run_name: helper_with_dp_syn_dp_gpt_small_generator_tuned_hyp_helper_percent_100
     embedding_type: loss_seq
     do_save_weight_initialization: False
     optimization:

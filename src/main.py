@@ -30,11 +30,12 @@ def main(config: EasyDict):
     # --------------------
 
     # Train if the generative model is not provided
-    if os.path.exists(config.generator.train.saving_dir):
-        logging.info(f"Loading the generator model from {config.generator.train.saving_dir} ...")
-        generator_model = AutoModelForCausalLM.from_pretrained(config.generator.train.saving_dir)
-    else:
-        generator_model = fine_tune_generator(config, dm, train_with_dp=config.generator.train.train_with_dp)
+    # TODO: temporary, uncomment the following for the final version
+    # if os.path.exists(config.generator.train.saving_dir):
+    #     logging.info(f"Loading the generator model from {config.generator.train.saving_dir} ...")
+    #     generator_model = AutoModelForCausalLM.from_pretrained(config.generator.train.saving_dir)
+    # else:
+    #     generator_model = fine_tune_generator(config, dm, train_with_dp=config.generator.train.train_with_dp)
 
     
     # --------------------
@@ -50,7 +51,8 @@ def main(config: EasyDict):
 
 
     # del the generator model from memory
-    del generator_model
+    # TODO: temporary, uncomment the following for the final version
+    # del generator_model
 
     # --------------------
     # Part 3. Train/Load Audit Model

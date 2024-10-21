@@ -7,7 +7,7 @@ from transformers import TrainingArguments
 from easydict import EasyDict
 
 from src.datasets.datamodule import PANORAMIADataModule
-from src.audit_model.utils import DP_training, regular_training
+from src.audit_model.utils import dp_training, regular_training
 
     
     
@@ -46,6 +46,7 @@ def train_audit_model(
         weight_decay=audit_config.optimization.weight_decay,
         warmup_steps=audit_config.optimization.warmup_steps,
         per_device_train_batch_size=audit_config.optimization.batch_size,
+        gradient_accumulation_steps=audit_config.optimization.gradient_accumulation_steps if train_with_DP else 1,
 
         save_strategy=audit_config.optimization.save_strategy,
         load_best_model_at_end=audit_config.optimization.load_best_model_at_end,
@@ -58,7 +59,7 @@ def train_audit_model(
 
 
     if train_with_DP:
-        return DP_training()
+        return dp_training(config, training_args, train_dataset, validation_dataset)
     else:
         return regular_training(config, training_args, train_dataset, validation_dataset, train_helper)
 

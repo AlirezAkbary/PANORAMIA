@@ -16,7 +16,7 @@ from src.attacks.model import TextAttackModel
 from src.attacks.custom_trainer import TwoPhaseTrainer
 from src.attacks.utils import set_wand_group
 
-os.environ["WANDB__SERVICE_WAIT"]="300"
+os.environ["WANDB__SERVICE_WAIT"]="3000"
 
 def train_attack(
     config: EasyDict, 

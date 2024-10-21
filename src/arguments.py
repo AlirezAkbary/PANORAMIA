@@ -101,6 +101,9 @@ def add_audit_args(parser):
     parser.add_argument('--audit_target_optimization_save_strategy', type=str, help='', default='no')
     parser.add_argument('--audit_target_optimization_load_best_model_at_end', action='store_true', help='', default=False)
     parser.add_argument('--audit_target_optimization_save_total_limit', type=str, help='', default=None)
+    parser.add_argument('--audit_target_optimization_gradient_accumulation_steps', type=int, help='', default=64)
+    parser.add_argument('--audit_target_dp_per_example_max_grad_norm', type=float, help='', default=0.1)
+    parser.add_argument('--audit_target_dp_target_epsilon', type=float, help='', default=3)
 
     # helper model training arguments
     parser.add_argument('--audit_helper_pretrained_model_name_or_path', type=str, help='', default='gpt2')
@@ -202,7 +205,8 @@ def args_to_nested_dict(args):
         },
         "audit": {
             "target": {
-                "optimization": {}
+                "optimization": {},
+                "dp": {}
             },
             "helper": {
                 "optimization": {}
@@ -226,6 +230,8 @@ def args_to_nested_dict(args):
         elif key.startswith("generator_train"):
             if key.startswith("generator_train_optimization"):
                 nested_config['generator']['train']['optimization']["_".join(key_parts[3:])] = value
+            elif key.startswith("generator_train_dp"):
+                nested_config['generator']['train']['dp']["_".join(key_parts[3:])] = value
             else:
                 nested_config['generator']['train']["_".join(key_parts[2:])] = value
         elif key.startswith("generator_generation"):
@@ -236,6 +242,8 @@ def args_to_nested_dict(args):
         elif key.startswith("audit_target"):
             if key.startswith("audit_target_optimization"):
                 nested_config['audit']['target']['optimization']["_".join(key_parts[3:])] = value
+            elif key.startswith("audit_target_dp"):
+                nested_config['audit']['target']['dp']["_".join(key_parts[3:])] = value
             else:
                 nested_config['audit']['target']["_".join(key_parts[2:])] = value
         elif key.startswith("audit_helper"):

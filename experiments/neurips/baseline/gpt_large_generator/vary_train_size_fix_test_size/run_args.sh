@@ -1,32 +1,34 @@
-            #!/bin/bash
+#!/bin/bash
 #SBATCH --nodes=1
 #SBATCH --gpus-per-node=1
 #SBATCH --mem=32000M
-#SBATCH --time=0-5:00
+#SBATCH --time=0-8:00
 #SBATCH --account=def-t55wang
 
 
-module load StdEnv/2023 arrow/15.0.1 rust/1.76.0 python scipy-stack
+module load StdEnv/2023 arrow/15.0.1 rust/1.76.0 python scipy-stack/2024a
 
 source ../../test-priv/test-priv-env/bin/activate
 
 
 attack_main=$1
 attack_num_train=$2
-game_seed_num=$3
-which_helper=$4
-mia_seed_num=$5
-training_seed_num=$6
+which_helper=$3
+mia_seed_num=$4
+training_seed_num=$5
 
 
-log_dir="/home/aaa208/scratch/PANORAMIA/experiments/neurips/baseline/RMFN/n_train_$attack_num_train/$which_helper/mia_seed_$mia_seed_num/train_seed_$training_seed_num/"
-output_dir="/home/aaa208/scratch/PANORAMIA/outputs/neurips/attacks/baseline/RMFN/n_train_$attack_num_train/$which_helper/mia_seed_$mia_seed_num/train_seed_$training_seed_num/"
+log_dir="/home/aaa208/scratch/PANORAMIA/experiments/neurips/baseline/gpt_large_generator/vary_train_size_fix_test_size/n_train_$attack_num_train/$which_helper/mia_seed_$mia_seed_num/train_seed_$training_seed_num/"
+output_dir="/home/aaa208/scratch/PANORAMIA/outputs/neurips/attacks/baseline/gpt_large_generator/vary_train_size_fix_test_size/n_train_$attack_num_train/$which_helper/mia_seed_$mia_seed_num/train_seed_$training_seed_num/"
+
+syn_data_dir="/home/aaa208/scratch/PANORAMIA/outputs/neurips/gpt_large_generator/saved_synthetic_data/syn_data.csv"
+helper_dir="/home/aaa208/scratch/PANORAMIA/outputs/neurips/audit_model/helper_gpt_large/saved_model/epoch_60/checkpoint-3474/"
 
 audit_mode="RMFN_fixed_test"
 
                                     
 python -m src.main  --base_log_dir $log_dir \
-                    --base_project_name "PANORAMIA-neurips-baseline-RMFN_fixed_test-$which_helper-attempt_2" \
+                    --base_project_name "PANORAMIA-arxiv-v2-baseline-RMFN_vary_train_size_fix_test_size-$which_helper-attempt_2" \
                     --base_attack_main $attack_main \
                     --dataset_path "EleutherAI/wikitext_document_level" \
                     --dataset_name "wikitext-103-raw-v1" \
@@ -34,7 +36,7 @@ python -m src.main  --base_log_dir $log_dir \
                     --dataset_validation_size 0.1 \
                     --dataset_test_size 0.1 \
                     --dataset_num_chunks_keep 50 \
-                    --dataset_path_to_synthetic_data "/home/aaa208/scratch/PANORAMIA/outputs/neurips/generator/saved_synthetic_data/syn_data.csv" \
+                    --dataset_path_to_synthetic_data $syn_data_dir \
                     --dataset_synthetic_text_column_name "text" \
                     --dataset_seed 8 \
                     --dataset_do_shuffle \
@@ -50,7 +52,7 @@ python -m src.main  --base_log_dir $log_dir \
                     --dataset_mia_num_test 10000 \
                     --dataset_mia_seed $mia_seed_num\
                     --dataset_audit_mode $audit_mode \
-                    --dataset_game_seed $game_seed_num \
+                    --dataset_game_seed $mia_seed_num \
                     --generator_train_pretrained_model_name_or_path "gpt2" \
                     --generator_train_saving_dir "/home/aaa208/scratch/PANORAMIA/outputs/neurips/generator/saved_model/checkpoint-2784/" \
                     --generator_train_run_name "generator-fine-tune-paper-target_whole" \
@@ -71,7 +73,7 @@ python -m src.main  --base_log_dir $log_dir \
                     --generator_generation_parameters_temperature 1 \
                     --generator_generation_parameters_num_return_sequences 5 \
                     --audit_target_pretrained_model_name_or_path "gpt2" \
-                    --audit_target_saving_dir "/home/aaa208/scratch/PANORAMIA/outputs/neurips/audit_model/saved_model/epoch_100/epoch_200/checkpoint-65000/" \
+                    --audit_target_saving_dir "/home/aaa208/scratch/PANORAMIA/outputs/neurips/audit_model/saved_model/epoch_100/epoch_200/checkpoint-50000/" \
                     --audit_target_seed 42 \
                     --audit_target_run_name "target_epoch_100_block_size_64" \
                     --audit_target_embedding_type "loss_seq" \
@@ -82,7 +84,7 @@ python -m src.main  --base_log_dir $log_dir \
                     --audit_target_optimization_epoch 100 \
                     --audit_target_optimization_save_strategy "no" \
                     --audit_helper_pretrained_model_name_or_path "gpt2" \
-                    --audit_helper_saving_dir "/home/aaa208/scratch/PANORAMIA/outputs/neurips/audit_model/helper_with_syn/saved_model/epoch_60/checkpoint-2646/" \
+                    --audit_helper_saving_dir $helper_dir \
                     --audit_helper_seed 42 \
                     --audit_helper_run_name "helper_with_syn_helper_percent_100" \
                     --audit_helper_embedding_type "loss_seq" \
@@ -96,10 +98,10 @@ python -m src.main  --base_log_dir $log_dir \
                     --audit_helper_optimization_save_total_limit 1 \
                     --attack_baseline_net_type "$which_helper" \
                     --attack_baseline_distinguisher_type "GPT2Distinguisher" \
-                    --attack_baseline_run_name "RMFN_fixed_test" \
+                    --attack_baseline_run_name "RMFN_vary_train_size_fix_test_size" \
                     --attack_baseline_training_args_seed $training_seed_num \
                     --attack_baseline_training_args_output_dir $output_dir \
-                    --attack_baseline_training_args_max_steps 6000 \
+                    --attack_baseline_training_args_max_steps 8000 \
                     --attack_baseline_training_args_batch_size 64 \
                     --attack_baseline_training_args_warmup_steps 500 \
                     --attack_baseline_training_args_weight_decay 0.01 \
