@@ -10,7 +10,14 @@ def add_load_args(parser):
 def add_base_args(parser):
     parser.add_argument("--base_log_dir", type=str, help='Path to where the log file would be saved')
     parser.add_argument("--base_project_name", type=str, help='Project name for wandb logging')
-    parser.add_argument("--base_attack_main", type=str, help='', default='baseline')
+    
+    parser.add_argument("--base_train_load_target", action="store_true", help="Train the target model, or loads it if there exists a model in the path provided by --audit_target_saving_dir argument")
+    parser.add_argument("--base_train_load_generator", action="store_true", help="Train the generative model, or loads it if there exists a model in the path provided by --generator_train_saving_dir argument")
+    parser.add_argument("--base_generate_samples", action="store_true", help="Generate synthetic samples, if there is no synthetic sample in the path provided by --generator_generation_saving_dir argument")
+    parser.add_argument("--base_train_load_helper", action="store_true", help="Train the helper model, or loads if if there exists a model in the path provided by --audit_helper_saving_dir argument")
+    parser.add_argument("--base_train_baseline", action="store_true", help="Train and evaluate the baseline classifier")
+    parser.add_argument("--base_train_mia", action="store_true", help="Train and evaluate the MIA classifier")
+    parser.add_argument("--base_full_pipeline", action="store_true", help="Run the full pipeline from start to finish")
 
     return parser
 

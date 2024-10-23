@@ -30,20 +30,20 @@ def main(config: EasyDict):
     # --------------------
 
     # Train if the generative model is not provided
-    # TODO: temporary, uncomment the following for the final version
-    # if os.path.exists(config.generator.train.saving_dir):
-    #     logging.info(f"Loading the generator model from {config.generator.train.saving_dir} ...")
-    #     generator_model = AutoModelForCausalLM.from_pretrained(config.generator.train.saving_dir)
-    # else:
-    #     generator_model = fine_tune_generator(config, dm, train_with_dp=config.generator.train.train_with_dp)
+    if config.base.train_load_generator or config.base.full_pipeline:
+        if os.path.exists(config.generator.train.saving_dir):
+            logging.info(f"Loading the generator model from {config.generator.train.saving_dir} ...")
+            generator_model = AutoModelForCausalLM.from_pretrained(config.generator.train.saving_dir)
+        else:
+            generator_model = fine_tune_generator(config, dm, train_with_dp=config.generator.train.train_with_dp)
 
     
     # --------------------
     # Part 2. Generate/Load Synthetic Samples
     # --------------------
-
-    if not os.path.exists(config.generator.generation.saving_dir):
-        generate_synthetic_samples(config, dm, generator_model)
+    if config.base.generate_samples or config.base.full_pipeline:
+        if not os.path.exists(config.generator.generation.saving_dir):
+            generate_synthetic_samples(config, dm, generator_model)
 
     
     # Handling the synthetic dataset in data module
@@ -51,51 +51,55 @@ def main(config: EasyDict):
 
 
     # del the generator model from memory
-    # TODO: temporary, uncomment the following for the final version
-    # del generator_model
+    if config.base.train_load_generator or config.base.full_pipeline:
+        del generator_model
 
     # --------------------
     # Part 3. Train/Load Audit Model
     # --------------------
 
     # train the target model
-    if os.path.exists(config.audit.target.saving_dir):
-        target_model = AutoModelForCausalLM.from_pretrained(config.audit.target.saving_dir)
-    else:
-        target_model = train_audit_model(
-            config=config,
-            dm=dm,
-            train_helper=False,
-            train_with_DP=config.audit.target.train_with_DP
-        )
+    if config.base.train_load_target or config.base.full_pipeline:
+        if os.path.exists(config.audit.target.saving_dir):
+            target_model = AutoModelForCausalLM.from_pretrained(config.audit.target.saving_dir)
+        else:
+            target_model = train_audit_model(
+                config=config,
+                dm=dm,
+                train_helper=False,
+                train_with_DP=config.audit.target.train_with_DP
+            )
 
     # train the helper model
-    if os.path.exists(config.audit.helper.saving_dir):
-        helper_model = AutoModelForCausalLM.from_pretrained(config.audit.helper.saving_dir)
-    else:
-        helper_model = train_audit_model(
-            config=config,
-            dm=dm,
-            train_helper=True,
-            train_with_DP=False
-        )
+    if config.base.train_load_helper or config.base.full_pipeline:
+        if os.path.exists(config.audit.helper.saving_dir):
+            helper_model = AutoModelForCausalLM.from_pretrained(config.audit.helper.saving_dir)
+        else:
+            helper_model = train_audit_model(
+                config=config,
+                dm=dm,
+                train_helper=True,
+                train_with_DP=False
+            )
 
     # --------------------
     # Part 4. MIA/Baseline Attack
     # --------------------
 
     # instantiate audit model objects
-    target_audit_model = AuditModelGPT2CLM(
-        model=target_model,
-        embedding_type=config.audit.target.embedding_type,
-        block_size=dm.block_size
-    )
+    if config.base.train_load_target or config.base.full_pipeline:
+        target_audit_model = AuditModelGPT2CLM(
+            model=target_model,
+            embedding_type=config.audit.target.embedding_type,
+            block_size=dm.block_size
+        )
 
-    helper_audit_model = AuditModelGPT2CLM(
-        model=helper_model,
-        embedding_type=config.audit.helper.embedding_type,
-        block_size=dm.block_size
-    )
+    if config.base.train_load_helper or config.base.full_pipeline:
+        helper_audit_model = AuditModelGPT2CLM(
+            model=helper_model,
+            embedding_type=config.audit.helper.embedding_type,
+            block_size=dm.block_size
+        )
     
     # train the baseline and mia
 
@@ -103,7 +107,7 @@ def main(config: EasyDict):
     # config = setup_attack_output_dir(config)
     
 
-    if config.base.attack_main == 'baseline':
+    if config.base.train_baseline or config.base.full_pipeline:
         if os.path.exists(os.path.join(config.attack.baseline.training_args.output_dir, config.attack.baseline.training_args.which_test +'_preds.npy')):
             ...
         else:
@@ -113,7 +117,8 @@ def main(config: EasyDict):
                 audit_model=helper_audit_model,
                 train_baseline=True
             )
-    elif config.base.attack_main == 'mia':
+
+    if config.base.train_mia or config.base.full_pipeline:
         if os.path.exists(os.path.join(config.attack.mia.training_args.output_dir, config.attack.mia.training_args.which_test + '_preds.npy')):
             ...
         else:
@@ -131,18 +136,12 @@ def main(config: EasyDict):
                     audit_model=target_audit_model,
                     train_baseline=False
                 )
-                ...
-    
-    # audit 
+                
 
     
     
 
     
-
-
-
-
 
 
 if __name__ == "__main__":
