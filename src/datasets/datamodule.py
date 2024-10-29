@@ -322,6 +322,7 @@ class PANORAMIADataModule:
     def _split_syn_helper_train_val(self):
         _, syn_helper = self._split_syn_audit_helper()
 
+        # TODO: hardcoded, make it an argument
         validation_split_percentage = 10
 
         syn_num_validation = self._convert_percent_to_index(validation_split_percentage, len(syn_helper))
