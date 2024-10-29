@@ -120,7 +120,7 @@ outputs/baseline/
 - result_best_val.txt # Baseline model performance on the validation set
 ```
 
-### Training the MIA Classifier and Saving its Predicitions on the Evaluation Set
+### 6. Training the MIA Classifier and Saving its Predicitions on the Evaluation Set
 
 Finally, we train the Membership Inference Attack (MIA) classifier to distinguish members from non-members of the target model.
 
@@ -138,9 +138,9 @@ python -m src.main  --base_log_dir "logs/MIA/" \
 
 The output files for the MIA classifier are structured similarly to those for the baseline classifier.
 
-# Plots and Audit measurements (statistical estimation)
+## Plots and Audit measurements (statistical estimation)
 
-# O(1) scores
+## O(1) scores
 
 ## Running the Full Pipeline At Once
 
