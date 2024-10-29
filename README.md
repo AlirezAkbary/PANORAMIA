@@ -14,99 +14,132 @@ This repository contains the implementation of the privacy auditing pipeline des
 
 `pip install -r requirements.txt`
 
-## Running the code
-To run the whole pipeline of PANORAMIA, from training the target model to get the audit values, it might be too long. Here, we explain how you can run each module separately. Later, we explain how you can run the whole pipeline all at once if you want to. 
+## Running the Code
+Executing the complete PANORAMIA pipeline, from training the target model through to obtaining the privacy measurements, can be time-intensive. In this section, we provide guidance on running each module independently for flexibility. For users interested in executing the entire pipeline in one go, instructions for that option are also provided below.
 
-### Training the Generative Model
+
+### 1. Training the Target Model
+
+The initial step in the pipeline involves training the target model that will be audited.
+
+```python
+python -m src.main --base_train_load_target \
+                   --base_log_dir "logs/target/" \
+                   --audit_target_saving_dir "outputs/target/" \
+                   --audit_target_pretrained_model_name_or_path "gpt2" 
+```
+
+This process will result in multiple checkpoints throughout training. Select a checkpoint that will serve as the model for privacy auditing. Ensure sufficient storage space is available, as the training process produces numerous checkpoints.
+
+
+```bash
+TARGET_CHECKPOINT_DIR="outputs/target/epoch_200/checkpoint-25000/" # Note: The save path is influenced by the epoch number. Adapt in case of changing the epoch number.
+```
+
+
+### 2. Training the Generative Model
+
+The next step in our pipeline is to train a generator model. You can train the generator with the command
 
 ```python
 python -m src.main --base_train_load_generator \
-                   --base_log_dir \
-                   --generator_train_pretrained_model_name_or_path \
-                   --generator_train_saving_dir                 
+                   --base_log_dir "logs/generator/train/" \
+                   --generator_train_pretrained_model_name_or_path "gpt2" \
+                   --generator_train_saving_dir "outputs/generator/saved_model/"                 
 ```
-The trained generator with the least validation loss will be saved to `outputs/generator/saved_model/checkpoint-XXXX/`, where `XXXX` is a checkpoint number.
+
+The generator model with the lowest validation loss will be saved in `outputs/generator/saved_model/checkpoint-XXXX/`, where `XXXX` represents the checkpoint number.
 
 
-### Generating Synthetic Samples
+### 3. Generating Synthetic Samples
+
 To run the next step using the saved checkpoint of the generator model, you can retrieve the checkpoint directory automatically by running:
+
 ```bash
 GEN_CHECKPOINT_DIR=$(ls -td outputs/generator/saved_model/checkpoint-* | head -1)
 ```
 
+Then, you can generate synthetic samples with the command
+
 ```python
 python -m src.main --base_train_load_generator \
                    --base_generate_samples \
-                   --base_log_dir \ 
-                   --generator_train_pretrained_model_name_or_path \
-                   --generator_train_saving_dir \
-                   --generator_generation_saving_dir                 
+                   --base_log_dir "logs/generator/generation/" \ 
+                   --generator_train_pretrained_model_name_or_path "gpt2" \
+                   --generator_train_saving_dir $GEN_CHECKPOINT_DIR \
+                   --generator_generation_saving_dir "outputs/generator/generation/"              
 ```
 
+The synthetic data will be saved as `outputs/generator/generation/syn_data.csv`. 
 
-### Training the Target Model
 
-```python
-python -m src.main --base_train_load_target \
-                   --base_log_dir \
-                   --audit_target_saving_dir \
-                   --audit_target_pretrained_model_name_or_path \
-                   --
-```
-this will result in multiple checkpoints throught the training of the target models. Choose a checkpoint for which the model privacy would be audited. make sure enough space exists as there are too many checkpoints. 
+### 4. Training the Helper Model
 
-note: in saving, the epoch also affects the address of the saved target model -> take care of that
+After generating synthetic data, the helper model can be trained. This model assists the baseline classifier in distinguishing real data from synthetic data.
 
-```bash
-TARGET_CHECKPOINT=
-```
-
-### Training the Helper Model
 ```python
 python -m src.main --base_train_load_helper \
-                   --base_log_dir \
-                   --dataset_path_to_synthetic_data \
-                   --audit_helper_saving_dir \
-                   --audit_helper_pretrained_model_name_or_path \
+                   --base_log_dir "logs/helper/" \
+                   --dataset_path_to_synthetic_data "outputs/generator/generation/syn_data.csv" \
+                   --audit_helper_saving_dir "outputs/helper/" \
+                   --audit_helper_pretrained_model_name_or_path "gpt2"
 ```  
 
-note: in saving, the epoch also affects the address of the saved helper model -> take care of that
-
-also, find out the checkpoint of the helper
+The generator model with the lowest validation loss will be saved in `outputs/generator/saved_model/checkpoint-XXXX/`, where `XXXX` represents the checkpoint number. To specify it:
 
 ```bash
-HELPER_CHECKPOINT=
+HELPER_CHECKPOINT_DIR=$(ls -td outputs/helper/epoch_60/checkpoint-* | head -1) # Note: The save path is influenced by the epoch number. Adapt in case of changing the epoch number.
 ```
 
-### Training the Baseline Classifier and Saving its Predicitions on the Evaluation Set
+
+### 5. Training the Baseline Classifier and Saving its Predicitions on the Evaluation Set
+
+Next, we study the quality of the synthetic data by training our baseline classifier, distinguishing real from synthetic data. 
 
 ```python
-python -m src.main  --base_log_dir \
+python -m src.main  --base_log_dir "logs/baseline/" \
                     --base_train_load_helper \
                     --base_train_baseline \    
-                    --dataset_path_to_synthetic_data \
-                    --dataset_mia_num_train \
-                    --dataset_mia_num_val \
-                    --dataset_mia_num_test \
-                    --audit_helper_saving_dir \
-                    --attack_baseline_training_args_output_dir                  
+                    --dataset_path_to_synthetic_data "outputs/generator/generation/syn_data.csv" \
+                    --dataset_mia_num_train 10000 \
+                    --dataset_mia_num_val 1000 \
+                    --dataset_mia_num_test 10000 \
+                    --audit_helper_saving_dir $HELPER_CHECKPOINT_DIR \
+                    --attack_baseline_training_args_output_dir "outputs/baseline/"                  
 ```
 <!-- base_attack_main argument has been deleted. Take care of it -->
-This will leave blah blah blah
+This will output a bunch of files under the directory `outputs/baseline` with structure
+
+```
+outputs/baseline/
+- model.pth # model with best validation metric
+- test_preds.npy # predictions of real or synthetic on the test set
+- test_true_labels.npy # ground truths of real or synthetic
+- test_result.txt # performance of the baseline on the test set
+- result_best_val.txt # perforamcne of the baseline on the validation set
+```
 
 ### Training the MIA Classifier and Saving its Predicitions on the Evaluation Set
 
+Finally, we can train the membership inference attack classifier the detect members of the target model from the non-members.
+
 ```python
-python -m src.main  --base_log_dir \
+python -m src.main  --base_log_dir "logs/MIA/" \
                     --base_train_load_target \
                     --base_train_mia \ 
-                    --dataset_path_to_synthetic_data \
-                    --dataset_mia_num_train \
-                    --dataset_mia_num_val \
-                    --dataset_mia_num_test \
-                    --audit_target_saving_dir \
-                    --attack_mia_training_args_output_dir
+                    --dataset_path_to_synthetic_data "outputs/generator/generation/syn_data.csv" \
+                    --dataset_mia_num_train 10000 \
+                    --dataset_mia_num_val 1000 \
+                    --dataset_mia_num_test 10000 \
+                    --audit_target_saving_dir $TARGET_CHECKPOINT_DIR \
+                    --attack_mia_training_args_output_dir "outputs/MIA/"
 ```
+
+The output files are similar to the baseline case. 
+
+# Plots and Audit measurements (statistical estimation)
+
+# O(1) scores
 
 ## Running the Full Pipeline At Once
 
