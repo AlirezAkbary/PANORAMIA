@@ -85,7 +85,7 @@ python -m src.main --base_train_load_helper \
                    --audit_helper_pretrained_model_name_or_path "gpt2"
 ```  
 
-The generator model with the lowest validation loss will be saved in `outputs/generator/saved_model/checkpoint-XXXX/`, where `XXXX` represents the checkpoint number. To specify it:
+The helper model with the lowest validation loss will be saved in `outputs/helper/epoch_60/checkpoint-XXXX/`, where `XXXX` represents the checkpoint number. To specify it:
 
 ```bash
 HELPER_CHECKPOINT_DIR=$(ls -td outputs/helper/epoch_60/checkpoint-* | head -1) # Note: The save path is influenced by the epoch number. Adapt in case of changing the epoch number.
@@ -94,7 +94,7 @@ HELPER_CHECKPOINT_DIR=$(ls -td outputs/helper/epoch_60/checkpoint-* | head -1) #
 
 ### 5. Training the Baseline Classifier and Saving its Predicitions on the Evaluation Set
 
-Next, we study the quality of the synthetic data by training our baseline classifier, distinguishing real from synthetic data. 
+To evaluate the quality of the synthetic data, we train a baseline classifier to distinguish real data from synthetic data.
 
 ```python
 python -m src.main  --base_log_dir "logs/baseline/" \
@@ -108,20 +108,21 @@ python -m src.main  --base_log_dir "logs/baseline/" \
                     --attack_baseline_training_args_output_dir "outputs/baseline/"                  
 ```
 <!-- base_attack_main argument has been deleted. Take care of it -->
-This will output a bunch of files under the directory `outputs/baseline` with structure
+
+This command will output several files in `outputs/baseline`, organized as follows:
 
 ```
 outputs/baseline/
-- model.pth # model with best validation metric
-- test_preds.npy # predictions of real or synthetic on the test set
-- test_true_labels.npy # ground truths of real or synthetic
-- test_result.txt # performance of the baseline on the test set
-- result_best_val.txt # perforamcne of the baseline on the validation set
+- model.pth # Model with best validation performance
+- test_preds.npy # Predictions (real or synthetic) on the test set
+- test_true_labels.npy # Ground truth labels (real or synthetic) for the test
+- test_result.txt # Baseline model performance on the test set
+- result_best_val.txt # Baseline model performance on the validation set
 ```
 
 ### Training the MIA Classifier and Saving its Predicitions on the Evaluation Set
 
-Finally, we can train the membership inference attack classifier the detect members of the target model from the non-members.
+Finally, we train the Membership Inference Attack (MIA) classifier to distinguish members from non-members of the target model.
 
 ```python
 python -m src.main  --base_log_dir "logs/MIA/" \
@@ -135,7 +136,7 @@ python -m src.main  --base_log_dir "logs/MIA/" \
                     --attack_mia_training_args_output_dir "outputs/MIA/"
 ```
 
-The output files are similar to the baseline case. 
+The output files for the MIA classifier are structured similarly to those for the baseline classifier.
 
 # Plots and Audit measurements (statistical estimation)
 
