@@ -147,6 +147,7 @@ The output files for the MIA classifier are structured similarly to those for th
 ## Reproducing the Exact Results in the Paper
 
 ## Project Structure
+<!--
 ```
 .
 ├── src                                 # Contains the core code for the project
@@ -174,6 +175,31 @@ The output files for the MIA classifier are structured similarly to those for th
 └── README.md
 
 ```
+-->
+- `src/`: Contains the core code for the project
+    - `datasets/`: Data handling and preparation for all stages of the PANORAMIA privacy auditing pipeline
+        - `datamodule.py`: Initializes datasets and dataloaders, ensuring data consistency across all experiments in the PANORAMIA pipeline
+    - `generator/`: Synthetic text data generation for PANORAMIA
+        - `generate.py`: Generates synthetic data samples
+        - `train.py`: Fine-tunes a text generator model (Language Model) on real data, with support for differentially private training
+        - `utils.py`: Utility functions for model training, length-checking of synthetic samples, and privacy configurations
+    - `audit_model/`: Contains modules for preparing PANORAMIA audit models, including model wrappers, training scripts, and utilities supporting differentially private (DP) training
+        - `audit.py`: Defines core audit model classes for privacy auditing, with embedding extraction and model-freezing functions
+        - `dp_trainer.py`: Implements differentially private (DP) training routines and privacy configurations for audit models
+        - `train.py`: Trains audit models (either target or helper) with support for differentially private (DP) and regular training modes
+        - `utils.py`: Utility functions for model setup, initialization, and reproducibility in audit model training
+    - `attacks/`: Contains modules for executing privacy attacks, including model definitions, custom training routines, and utilities for deterministic setup and configuration management for membership inference and baseline attacks
+        - `custom_trainer.py`: Defines a two-phase trainer class to manage model training and evaluation, supporting metrics logging, deterministic training, and adaptable configurations for privacy attacks
+        - `model.py`: Implements a GPT-2 based distinguisher network for privacy vulnerability detection (or real-fake detection in case of our baseline), combining text embeddings with featurized logits (either from the target model or the helper model). Includes configurable layers for embedding transformations and supports two-phase optimization to enhance classification effectiveness in privacy attacks
+        - `train.py`: Manages the training process for privacy attack models, setting up configurations, data modules, and logging. Supports model training for both baseline and membership inference attacks
+        - `utils.py`: Provides utility functions for setting random seeds, ensuring deterministic training, managing logging groups for baseline and membership inference attacks in `wandb`, and computing the privacy measurement on the validation set
+    - `main.py`: Orchestrates the PANORAMIA pipeline, managing data preparation, generative model training, synthetic sample generation, audit model training, and privacy attack execution
+    - `arguments.py`: Defines command-line arguments for PANORAMIA pipeline configuration
+    - `utils.py`: Contains utility functions for managing output directories and configuring paths based on experiment parameters for reproducibility and organized output storage
+- `experiments/`: Directory for managing experimental configurations and results
+- `requirements.txt`: Lists the dependencies required for the project
+- `README.md`: Documentation for understanding and running the project
+
 
 ## Configuration Parameters
 This section explains the configurable arguments in PANORAMIA, organized by functionality. Each group of arguments lets you control a specific part of the pipeline, like handling data, training models, generating synthetic data, running audits, or configuring privacy attacks. Each parameter includes a description, expected input, and default setting.
