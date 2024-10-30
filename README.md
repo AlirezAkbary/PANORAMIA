@@ -176,6 +176,7 @@ The output files for the MIA classifier are structured similarly to those for th
 
 ```
 -->
+<!--
 - `src/`: Contains the core code for the project
     - `datasets/`: Data handling and preparation for all stages of the PANORAMIA privacy auditing pipeline
         - `datamodule.py`: Initializes datasets and dataloaders, ensuring data consistency across all experiments in the PANORAMIA pipeline
@@ -199,10 +200,34 @@ The output files for the MIA classifier are structured similarly to those for th
 - `experiments/`: Directory for managing experimental configurations and results
 - `requirements.txt`: Lists the dependencies required for the project
 - `README.md`: Documentation for understanding and running the project
+-->
+- `src/`: Contains the core code for the project
+    - `datasets/`: Data handling and preparation for PANORAMIA's privacy auditing pipeline
+        - `datamodule.py`: Initializes datasets and dataloaders for consistency across experiments
+    - `generator/`: Synthetic text data generation for PANORAMIA
+        - `generate.py`: Generates synthetic data samples
+        - `train.py`: Fine-tunes a text generator model with optional DP training
+        - `utils.py`: Utility functions for model training, sample length-checking, and privacy configurations
+    - `audit_model/`: Modules for preparing PANORAMIA audit models, supporting DP training
+        - `audit.py`: Core audit model classes with embedding extraction and model-freezing
+        - `dp_trainer.py`: DP training routines and privacy configurations for audit models
+        - `train.py`: Trains audit models with support for DP and regular training
+        - `utils.py`: Utility functions for model setup and reproducibility in audit training
+    - `attacks/`: Modules for executing baseline/MIA attacks, including custom training and utilities
+        - `custom_trainer.py`: Two-phase trainer for model training and evaluation with logging
+        - `model.py`: GPT-2 based distinguisher for baseline/MIA classifiers
+        - `train.py`: Manages training for baseline and MIA privacy attack models
+        - `utils.py`: Utilities for seed setting, deterministic training, and privacy metric computation
+    - `main.py`: Orchestrates PANORAMIA pipeline from data prep to attack execution
+    - `arguments.py`: Defines command-line arguments for PANORAMIA configuration
+    - `utils.py`: Utilities for output directory management and path configuration
+- `experiments/`: Directory for experimental configurations and results
+- `requirements.txt`: Lists dependencies required for the project
+- `README.md`: Documentation for project setup and usage
 
 
 ## Configuration Parameters
-This section explains the configurable arguments in PANORAMIA, organized by functionality. Each group of arguments lets you control a specific part of the pipeline, like handling data, training models, generating synthetic data, running audits, or configuring privacy attacks. Each parameter includes a description, expected input, and default setting.
+This section explains the configurable arguments in PANORAMIA, organized by functionality. Each group of arguments lets you control a specific part of the pipeline, like handling data, training models, generating synthetic data, running audits, or configuring privacy attacks. Each parameter includes a description, and default setting.
 
 **Note:** This implementation was developed with the `EleutherAI/wikitext_document_level` dataset and the `gpt2` model in mind. The behavior with other datasets or models may be undefined, and adjustments to the code may be necessary for compatibility.
 
