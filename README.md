@@ -109,7 +109,7 @@ python -m src.main  --base_log_dir "logs/baseline/" \
 ```
 <!-- base_attack_main argument has been deleted. Take care of it -->
 
-This command will output several files in `outputs/baseline`, organized as follows:
+This command will output several files in `outputs/baseline/`, organized as follows:
 
 ```
 outputs/baseline/
@@ -141,10 +141,36 @@ The output files for the MIA classifier are structured similarly to those for th
 ## Plots and Audit measurements (statistical estimation)
 
 ## O(1) scores
+In order to get the loss values of the auditing set in O1 (the loss threshold attack), run:
 
+```python
+python -m src.main  --base_log_dir "logs/o1/" \
+                    --base_train_load_target \
+                    --base_evaluate_o1 \
+                    --dataset_path_to_synthetic_data "outputs/generator/generation/syn_data.csv" \
+                    --dataset_mia_num_train 0 \
+                    --dataset_mia_num_val 0 \
+                    --dataset_mia_num_test 10000 \
+                    --dataset_audit_mode "RMRN" \
+                    --audit_target_saving_dir $TARGET_CHECKPOINT_DIR \
+                    --audit_target_embedding_type "loss" \
+                    --attack_o1_output_dir "outputs/o1/"
+```
+
+This command will output two files in `outputs/o1/`, organized as follows:
+```
+outputs/o1/
+- O(1)_test_scores.npy # The scores (loss values) of the test set (auditing examples in O(1) terminology) under the target model.
+- O(1)_test_labels.npy # Ground truth labels (member or non-member) for the test set.
+```
+
+
+<!--
 ## Running the Full Pipeline At Once
 
-## Reproducing the Exact Results in the Paper
+## Reproducing All the Results Included in the Paper
+
+-->
 
 ## Project Structure
 <!--

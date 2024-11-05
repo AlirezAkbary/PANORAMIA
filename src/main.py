@@ -14,6 +14,7 @@ from src.generator.generate import generate_synthetic_samples
 from src.audit_model.train import train_audit_model
 from src.audit_model.audit import AuditModelGPT2CLM
 from src.attacks.train import train_attack
+from src.o1_loss_th_attack.evaluate_membership_loss import compute_and_save_membership_loss
 
 
 def main(config: EasyDict):
@@ -136,6 +137,13 @@ def main(config: EasyDict):
                     audit_model=target_audit_model,
                     train_baseline=False
                 )
+    
+    if config.base.evaluate_o1 or config.base.full_pipeline:
+        compute_and_save_membership_loss(
+            dm=dm,
+            audit_model=target_audit_model,
+            output_dir=config.attack.o1.output_dir
+        )
                 
 
     

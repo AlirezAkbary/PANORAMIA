@@ -17,6 +17,7 @@ def add_base_args(parser):
     parser.add_argument("--base_train_load_helper", action="store_true", help="Train the helper model, or loads if if there exists a model in the path provided by --audit_helper_saving_dir argument")
     parser.add_argument("--base_train_baseline", action="store_true", help="Train and evaluate the baseline classifier")
     parser.add_argument("--base_train_mia", action="store_true", help="Train and evaluate the MIA classifier")
+    parser.add_argument("--base_evaluate_o1", action="store_true", help="Compute the scores (loss values) for the O(1) auditing")
     parser.add_argument("--base_full_pipeline", action="store_true", help="Run the full pipeline from start to finish")
 
     return parser
@@ -180,6 +181,8 @@ def add_attack_args(parser):
     parser.add_argument('--attack_baseline_training_args_max_fpr', type=float, help='', default=0.1)
     parser.add_argument('--attack_baseline_training_args_evaluate_every_n_steps', type=int, help='', default=100)
     parser.add_argument('--attack_baseline_training_args_metric_for_best_model', type=str, help='', default='eps')
+
+    parser.add_argument('--attack_o1_output_dir', type=str, help='', default='outputs/o1/')
     return parser
 
 def init_args():
@@ -225,7 +228,8 @@ def args_to_nested_dict(args):
             },
             "baseline": {
                 "training_args": {}
-            }
+            },
+            "o1": {}
         }
     }
     for key, value in args.__dict__.items():
@@ -268,6 +272,8 @@ def args_to_nested_dict(args):
                 nested_config['attack']['baseline']['training_args']["_".join(key_parts[4:])] = value
             else:
                 nested_config['attack']['baseline']["_".join(key_parts[2:])] = value
+        elif key.startswith("attack_o1"):
+            nested_config['attack']['o1']["_".join(key_parts[2:])] = value
     return nested_config
         
         
