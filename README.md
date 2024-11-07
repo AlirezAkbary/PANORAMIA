@@ -138,7 +138,6 @@ python -m src.main  --base_log_dir "logs/MIA/" \
 
 The output files for the MIA classifier are structured similarly to those for the baseline classifier.
 
-## Plots and Audit measurements (statistical estimation)
 
 ## O(1) scores
 In order to get the loss values of the auditing set in O1 (the loss threshold attack), run:
@@ -160,10 +159,13 @@ python -m src.main  --base_log_dir "logs/o1/" \
 This command will output two files in `outputs/o1/`, organized as follows:
 ```
 outputs/o1/
-- O(1)_test_scores.npy # The scores (loss values) of the test set (auditing examples in O(1) terminology) under the target model.
-- O(1)_test_labels.npy # Ground truth labels (member or non-member) for the test set.
+- O(1)_members_loss.npy # The scores (loss values) of the members from the test set (auditing examples in O(1) terminology) under the target model.
+- O(1)_nonmembers_loss.npy # The scores (loss values) of the non-members from the test set (auditing examples in O(1) terminology) under the target model.
 ```
 
+## Plots and Audit measurements
+
+Refer to the main repository page in the parent directory.
 
 <!--
 ## Running the Full Pipeline At Once
@@ -442,3 +444,7 @@ These arguments configure settings for running privacy attacks, including Member
 - `--attack_baseline_training_args_max_fpr`: Maximum false positive rate for evaluation. (Default: `0.1`)
 - `--attack_baseline_training_args_evaluate_every_n_steps`: Step frequency for evaluations. (Default: `100`)
 - `--attack_baseline_training_args_metric_for_best_model`: Metric used to determine the best model, choose between `"acc"` for accuracy, `"auc"` for area under curve, and `"eps"` for the c closeness measurement, {c}_{lb}. (Default: `"eps"`)
+
+#### O(1) Attack Arguments
+
+- `--attack_o1_output_dir`: Directory for saving the outputs of the O(1) auditing method. (Default: `"outputs/o1/"`)

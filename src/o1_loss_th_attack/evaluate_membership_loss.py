@@ -36,17 +36,23 @@ def compute_and_save_membership_loss(dm, audit_model, output_dir, batch_size=32)
     # Ensure the output directory exists
     os.makedirs(output_dir, exist_ok=True)
     
-    # Save the scores to a .npy file
-    np.save(
-        os.path.join(output_dir, "O(1)_test_scores.npy"),
-        np.array(scores)
-    )
 
     labels = test_dataset['labels'].numpy()
+
+    # Separate scores based on labels
+    member_loss_values = scores[labels == 1.]
+    non_member_loss_values = scores[labels == 0.]
+
+    # Save the separated scores to .npy files
     np.save(
-            os.path.join(output_dir, "O(1)_test_labels.npy"),
-            np.array(labels)
-        )
+        os.path.join(output_dir, "O(1)_members_loss.npy"),
+        np.array(member_loss_values)
+    )
+
+    np.save(
+        os.path.join(output_dir, "O(1)_nonmembers_loss.npy"),
+        np.array(non_member_loss_values)
+    )
 
     
     return scores
