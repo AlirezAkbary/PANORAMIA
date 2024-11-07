@@ -15,8 +15,11 @@ This repository contains the implementation of the privacy auditing pipeline des
 `pip install -r requirements.txt`
 
 ## Running the Code
-Executing the complete PANORAMIA pipeline, from training the target model through to obtaining the privacy measurements, can be time-intensive. In this section, we provide guidance on running each module independently for flexibility. For users interested in executing the entire pipeline in one go, instructions for that option are also provided below.
+Executing the complete PANORAMIA pipeline, from training the target model through to obtaining the privacy measurements, can be time-intensive. In this section, we provide guidance on running each module independently for flexibility. 
 
+<!--
+For users interested in executing the entire pipeline in one go, instructions for that option are also provided below.
+-->
 
 ### 1. Training the Target Model
 
@@ -53,7 +56,7 @@ The generator model with the lowest validation loss will be saved in `outputs/ge
 
 ### 3. Generating Synthetic Samples
 
-To run the next step using the saved checkpoint of the generator model, you can retrieve the checkpoint directory automatically by running:
+To run the next step using the saved checkpoint of the generator model, first, retrieve the checkpoint directory of the generator model automatically by running:
 
 ```bash
 GEN_CHECKPOINT_DIR=$(ls -td outputs/generator/saved_model/checkpoint-* | head -1)
@@ -249,18 +252,18 @@ Refer to the main repository page in the parent directory.
     - `main.py`: Orchestrates PANORAMIA pipeline from data prep to attack execution
     - `arguments.py`: Defines command-line arguments for PANORAMIA configuration
     - `utils.py`: Utilities for output directory management and path configuration
-- `experiments/`: Directory for experimental configurations and results
+<!-- - `experiments/`: Directory for experimental configurations and results-->
 - `requirements.txt`: Lists dependencies required for the project
 - `README.md`: Documentation for project setup and usage
 
 
 ## Configuration Parameters
-This section explains the configurable arguments in PANORAMIA, organized by functionality. Each group of arguments lets you control a specific part of the pipeline, like handling data, training models, generating synthetic data, running audits, or configuring privacy attacks. Each parameter includes a description, and default setting.
+This section details the configurable arguments in PANORAMIA, organized by functionality. Each group of arguments lets you control a specific part of the pipeline, like handling data over the whole pipeline, training target models, generating synthetic data, running audits, and etc. Each parameter includes a description, and a default setting.
 
-**Note:** This implementation was developed with the `EleutherAI/wikitext_document_level` dataset and the `gpt2` model in mind. The behavior with other datasets or models may be undefined, and adjustments to the code may be necessary for compatibility.
+**Note:** This implementation was developed with the `EleutherAI/wikitext_document_level` dataset and the `gpt2` (as a target model) in mind. The behavior with other datasets or models may be undefined, and adjustments to the code may be necessary for compatibility.
 
 ### Base Arguments
-These arguments control general settings for the PANORAMIA pipeline, such as specifying paths for logs, managing logging with `wandb`, and selecting which parts of the pipeline to run (e.g., training models or generating synthetic data). 
+These arguments control general settings for the PANORAMIA pipeline, such as specifying paths for logs, managing logging with `wandb`, and selecting which parts of the pipeline to run (e.g., training target models or generating synthetic data). 
 
 - `--base_log_dir`: Path to where the log file would be saved. (Default: `"logs/"`)
 - `--base_project_name`: Project name for `wandb` logging. (Default: `"panoramia"`)
@@ -270,6 +273,7 @@ These arguments control general settings for the PANORAMIA pipeline, such as spe
 - `--base_train_load_helper`: Train the helper model or load it if available from `--audit_helper_saving_dir`. (Default: `False`)
 - `--base_train_baseline`: Train and evaluate the baseline classifier. (Default: `False`)
 - `--base_train_mia`: Train and evaluate the Membership Inference Attack (MIA) classifier. (Default: `False`)
+- `--base_evaluate_o1`: Compute the scores (loss values) for the O(1) auditing. (Default: `False`)
 - `--base_full_pipeline`: Execute the entire PANORAMIA pipeline from start to finish. (Default: `False`)
 
 ### Data Handler Module Arguments
@@ -300,9 +304,9 @@ These arguments configure dataset management, including specifying dataset paths
 - `--dataset_mia_num_val`: Number of validation examples (per class) for the baseline or MIA classifier. (Default: `1000`)
 - `--dataset_mia_num_test`: Number of test examples for the baseline or MIA (`m` in the PANORAMIA game). (Default: `10000`)
 - `--dataset_mia_seed`: Seed used for MIA or baseline dataset splitting into train/validation/test. (Default: `10`)
-- `--dataset_include_synthetic`: Include synthetic data in dataset if `True`. (Default: `False`)
+- `--dataset_include_synthetic`: Include synthetic data in the target model training dataset if `True`. (Default: `False`)
 - `--dataset_audit_mode`: Audit mode selection, choose between `"RMFN_fixed_test"`, `"RMRN"`, `"RMFN_train_test_complement"`. (Default: `"RMFN_fixed_test"`)
-- `--dataset_num_syn_canary`: Number of synthetic canaries to put in the training dataset, if `--dataset_include_synthetic`. (Default: `2000`)
+- `--dataset_num_syn_canary`: Number of synthetic canaries to put in the training dataset, if `--dataset_include_synthetic` is set. (Default: `2000`)
 - `--dataset_game_seed`: Seed for the random bits in the PANORAMIA game. (Default: `10`)
 - `--dataset_extra_synthetic`: Supply additional synthetic data for the audit purposes if needed if `True`. (Default: `False`)
 - `--dataset_path_to_extra_synthetic_data`: Path to the additional synthetic data, if included. (Default: `None`)
@@ -330,7 +334,7 @@ These arguments configure the training and generation processes for the syntheti
 
 - `--generator_generation_saving_dir`: Directory to save generated synthetic data. (Default: `"outputs/generator/saved_synthetic_data/"`)
 - `--generator_generation_syn_file_name`: Filename for saved synthetic data. (Default: `"syn_data.csv"`)
-- `--generator_generation_save_loss_on_target`: If `True`, saves the loss values of the generating data, under the target models. (Default: `False`)
+- `--generator_generation_save_loss_on_target`: If `True`, saves the loss values of the generated data, under the target models. (Default: `False`)
 - `--generator_generation_seed`: Random seed for generating synthetic data. (Default: `42`)
 - `--generator_generation_parameters_batch_size`: Batch size for generating synthetic samples. (Default: `128`)
 - `--generator_generation_parameters_prompt_sequence_length`: Length of prompt sequences used in generation, as the input. (Default: `64`)
@@ -398,7 +402,7 @@ These arguments configure settings for running privacy attacks, including Member
 - `--attack_mia_distinguisher_type`: Type of distinguisher model to use. Currently, the only option is `"GPT2Distinguisher"`. (Default: `"GPT2Distinguisher"`)
 - `--attack_mia_run_name`: Name for the MIA run, useful for logging and experiment tracking. (Default: `"RMFN_main_table"`)
 - `--attack_mia_training_args_seed`: Random seed for MIA training. (Default: `0`)
-- `--attack_mia_training_args_output_dir`: Directory to save MIA training outputs. (Default: `"outputs/attacks/mia/"`)
+- `--attack_mia_training_args_output_dir`: Directory to save the MIA outputs, such as the predictions on the test set. (Default: `"outputs/attacks/mia/"`)
 - `--attack_mia_training_args_which_test`: Specifies the file name of the test results. (Default: `"test"`)
 - `--attack_mia_training_args_max_steps`: Maximum training steps for MIA in the phase 2 of optimization. (Default: `6000`)
 - `--attack_mia_training_args_batch_size`: Batch size for MIA training in the phase 2 of optimization. (Default: `64`)
@@ -416,7 +420,7 @@ These arguments configure settings for running privacy attacks, including Member
 - `--attack_mia_training_args_overwrite_output_dir`: If `True`, overwrites output directory if it exists. (Default: `True`)
 - `--attack_mia_training_args_max_fpr`: Maximum false positive rate for evaluation. (Default: `0.1`)
 - `--attack_mia_training_args_evaluate_every_n_steps`: Frequency of evaluations during training, specified in steps. (Default: `100`)
-- `--attack_mia_training_args_metric_for_best_model`: Metric used to determine the best model, choose between `"acc"` for accuracy, `"auc"` for area under curve, and `"eps"` for the privacy measurement, {c + epsilon }_{lb}. (Default: `"eps"`)
+- `--attack_mia_training_args_metric_for_best_model`: Metric used to select the model with the best performance on the validation set, choose between `"acc"` for accuracy, `"auc"` for area under curve, and `"eps"` for the privacy measurement, {c + epsilon }_{lb}. (Default: `"eps"`)
 
 
 #### Baseline Attack Arguments
@@ -425,7 +429,7 @@ These arguments configure settings for running privacy attacks, including Member
 - `--attack_baseline_distinguisher_type`: Type of distinguisher model to use. Currently, the only option is `"GPT2Distinguisher"`.  (Default: `"GPT2Distinguisher"`)
 - `--attack_baseline_run_name`: Name for the baseline attack run, useful for logging and tracking. (Default: `"RMFN_main_table"`)
 - `--attack_baseline_training_args_seed`: Random seed for baseline attack training. (Default: `0`)
-- `--attack_baseline_training_args_output_dir`: Directory for saving baseline attack training outputs. (Default: `"outputs/attacks/baseline/"`)
+- `--attack_baseline_training_args_output_dir`: Directory for saving baseline attack outputs, such as predictions on the test set. (Default: `"outputs/attacks/baseline/"`)
 - `--attack_baseline_training_args_which_test`: Specifies the file name of the test results. (Default: `"test"`)
 - `--attack_baseline_training_args_max_steps`: Maximum training steps for baseline attack in the phase 2 of optimization.. (Default: `6000`)
 - `--attack_baseline_training_args_batch_size`: Batch size for baseline attack training in the phase 2 of optimization.. (Default: `64`)
@@ -443,7 +447,7 @@ These arguments configure settings for running privacy attacks, including Member
 - `--attack_baseline_training_args_overwrite_output_dir`: Overwrite existing output directory if `True`. (Default: `True`)
 - `--attack_baseline_training_args_max_fpr`: Maximum false positive rate for evaluation. (Default: `0.1`)
 - `--attack_baseline_training_args_evaluate_every_n_steps`: Step frequency for evaluations. (Default: `100`)
-- `--attack_baseline_training_args_metric_for_best_model`: Metric used to determine the best model, choose between `"acc"` for accuracy, `"auc"` for area under curve, and `"eps"` for the c closeness measurement, {c}_{lb}. (Default: `"eps"`)
+- `--attack_baseline_training_args_metric_for_best_model`: Metric used to select the model with the best performance on the validation set, choose between `"acc"` for accuracy, `"auc"` for area under curve, and `"eps"` for the c closeness measurement, {c}_{lb}. (Default: `"eps"`)
 
 #### O(1) Attack Arguments
 
