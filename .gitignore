@@ -12,6 +12,7 @@ src/o_of_one
 __pycache__
 .vscode
 .ipynb_checkpoints
+.DS_Store
 
 # temporary dir
 tmp_utils
